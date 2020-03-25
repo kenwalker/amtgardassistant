@@ -707,7 +707,6 @@ const request = require('request');
     jsork.player.getClasses = function (mundaneID) {
         var promise = new Promise(function (resolve, reject) {
             var url = ork + '?request=&call=Player%2FGetPlayerClasses&request[MundaneId]=' + mundaneID;
-            console.log("URL: " + url);
             request(url,
                 {},
                 function (error, result, data) {
