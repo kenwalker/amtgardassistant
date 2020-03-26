@@ -10,7 +10,6 @@ MongoClient.connect(url, function (err, db) {
     var dbo = db.db("amtbot");
     dbo.createCollection("ork_ids", function (err, res) {
         if (err) throw err;
-        console.log("Collection created!");
         db.close();
     });
 });
@@ -25,6 +24,38 @@ var allSpells = require('./spells.json');
 
 client.on("ready", () => {
     client.user.setActivity(`!ab help`);
+    console.log("BOT Active");
+});
+
+client.on("presenceUpdate", (oldMember, newMember) => {
+    if (newMember.user.presence.status === "online") {
+
+        MongoClient.connect(url, function (err, db) {
+            if (err) throw err;
+            var dbo = db.db("amtbot");
+            dbo.collection("attendance").findOne({ event_track: newMember.guild.id }, function (err, result) {
+                if (err || !result) {
+                    return;
+                }
+                var foundItem = result.participants.find(function (participant) {
+                    return participant.id === newMember.user.id;
+                });
+                if (!foundItem) {
+                    var userRecord = {
+                        username: newMember.user.username,
+                        id: newMember.user.id
+                    };
+                    result.participants.push(userRecord);
+                    var myobj = { $set: { participants: result.participants } };
+                    dbo.collection("attendance").updateOne({ event_track: newMember.guild.id }, myobj, function (err, res) {
+                        db.close();
+                    });
+                } else {
+                    db.close();
+                }
+            });
+        });
+    }
 });
 
 client.on("message", async message => {
@@ -92,27 +123,27 @@ client.on("message", async message => {
                         return;
                     }
                     var player = players[0];
-                    MongoClient.connect(url, function(err, db) {
+                    MongoClient.connect(url, function (err, db) {
                         if (err) throw err;
                         var dbo = db.db("amtbot");
-                        var myobj = { $set: { discord_id: message.author.id, ork_id: player.UserName, ork_mundane_id: player.MundaneId }};
-                        dbo.collection("ork_ids").updateOne({ discord_id: message.author.id }, myobj, { upsert: true }, function(err, res) {
-                          if (err) throw err;
-                          message.reply("Your discord account is now associated with the ORK id " + player.UserName);
-                          db.close();
+                        var myobj = { $set: { discord_id: message.author.id, ork_id: player.UserName, ork_mundane_id: player.MundaneId } };
+                        dbo.collection("ork_ids").updateOne({ discord_id: message.author.id }, myobj, { upsert: true }, function (err, res) {
+                            if (err) throw err;
+                            message.reply("Your discord account is now associated with the ORK id " + player.UserName);
+                            db.close();
                         });
                     });
                 });
                 return;
             }
             if (args.length === 1 && args[0] === 'remove_id') {
-                MongoClient.connect(url, function(err, db) {
+                MongoClient.connect(url, function (err, db) {
                     if (err) throw err;
                     var dbo = db.db("amtbot");
-                    dbo.collection("ork_ids").deleteOne({ discord_id: message.author.id }, function(err, res) {
-                      if (err) throw err;
-                      message.reply("Your discord account is no longer associated with an ORK id");
-                      db.close();
+                    dbo.collection("ork_ids").deleteOne({ discord_id: message.author.id }, function (err, res) {
+                        if (err) throw err;
+                        message.reply("Your discord account is no longer associated with an ORK id");
+                        db.close();
                     });
                 });
                 return;
@@ -129,19 +160,162 @@ client.on("message", async message => {
             helpEmbed.fields.push({ name: "!ab myork help", value: "Displays this help.", inline: false });
             message.reply({ embed: helpEmbed });
             break;
-        case "kentestingignore":
+        case "attendance":
             // console.log("message");
             // console.log(JSON.stringify(message));
-            // console.log("message.guild");
-            // console.log(JSON.stringify(message.guild));
+            var serverID = message.guild.id;
+            if (args.length === 0) {
+                MongoClient.connect(url, function (err, db) {
+                    if (err) throw err;
+                    var dbo = db.db("amtbot");
+                    dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
+                        if (err) throw err;
+                        var helpEmbed = {
+                            color: 3447003,
+                            title: "!ab attendance",
+                            description: "Track attendance for a discord event. Adds the current users and any users who join before stopping the tracking",
+                            fields: []
+                        };
+                        helpEmbed.fields.push({ name: "!ab attendance start", value: "Starts tracking attendance until stop is issued", inline: false });
+                        helpEmbed.fields.push({ name: "!ab attendance status", value: "Shows the curret attendance status", inline: false });
+                        helpEmbed.fields.push({ name: "!ab attendance stop", value: "Stops tracking attendance and shows the participant list", inline: false });
+                        if (result !== null) {
+                            helpEmbed.fields.push({ name: "CURRENTLY TRACKING", value: "There is an ACTIVE tracking session currently!", inline: false });
+                        }
+                        message.reply({ embed: helpEmbed });
+                        db.close();
+                    });
+                });
+                break;
+            }
+            if (args.length === 1 && args[0] === "start") {
+                MongoClient.connect(url, function (err, db) {
+                    if (err) throw err;
+                    var dbo = db.db("amtbot");
+                    dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
+                        if (err) throw err;
+                        if (result !== null) {
+                            message.reply("There's an ACTIVE tracking session started " + timeConversion(Date.now() - result.start_time) + " ago");
+                            return;
+                        }
+                        var participants = [];
+                        message.guild.members.cache.forEach(function (aUser) {
+                            if (aUser.presence.status === "online" && !aUser.user.bot) {
+                                var userRecord = {
+                                    username: aUser.user.username,
+                                    id: aUser.user.id
+                                };
+                                participants.push(userRecord);
+                            }
+                        });
+                        var newRecord = { event_track: serverID, start_time: Date.now(), participants: participants };
+                        dbo.collection("attendance").insertOne(newRecord, function (err, result) {
+                            message.reply("Starting to track attendance");
+                            db.close();
+                        });
+                    });
+                });
+                break;
+            }
+            if (args.length === 1 && args[0] === "status") {
+                MongoClient.connect(url, function (err, db) {
+                    if (err) throw err;
+                    var dbo = db.db("amtbot");
+                    dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
+                        if (err) throw err;
+                        if (result === null) {
+                            message.reply("There is no active tracking session in progress");
+                            return;
+                        }
+                        var ids_to_find = result.participants.map(function (aUser) { return aUser.id; });
+                        var search_filter = { discord_id: { $in: ids_to_find } };
+                        dbo.collection("ork_ids").find(search_filter).toArray(function (err, orkResults) {
+                            var discord_players = [];
+                            var ork_players = [];
+                            result.participants.forEach(function (aParticipant) {
+                                var orkInfo = orkResults.find(function (orkUser) {
+                                    return orkUser.discord_id === aParticipant.id;
+                                });
+                                discord_players.push(aParticipant.username);
+                                if (orkInfo) {
+                                    ork_players.push(orkInfo.ork_id);
+                                } else {
+                                    ork_players.push(" -- ");
+                                }
+                            });
+                            var statusEmbed = {
+                                color: 3447003,
+                                title: "Current attendance",
+                                fields: []
+                            };
+                            statusEmbed.fields.push({ name: "Tracking time", value: timeConversion(Date.now() - result.start_time), inline: false });
+                            statusEmbed.fields.push({ name: "Discord name", value: discord_players, inline: true });
+                            statusEmbed.fields.push({ name: "ORK name", value: ork_players, inline: true });
+                            message.reply({ embed: statusEmbed });
+                            db.close();
+                        });
+                    });
+                });
+                break;
+            }
+            if (args.length === 1 && args[0] === "stop") {
+                MongoClient.connect(url, function (err, db) {
+                    if (err) throw err;
+                    var dbo = db.db("amtbot");
+                    dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
+                        if (err) throw err;
+                        if (result === null) {
+                            message.reply("There is no active tracking session in progress");
+                            return;
+                        }
+                        if (result.participants.length === 0) {
+                            message.reply("There were no participants");
+                            dbo.collection("attendance").deleteOne({ event_track: serverID }, function (err, result) {
+                                db.close();
+                            });
+                            return;
+                        }
+                        var ids_to_find = result.participants.map(function (aUser) { return aUser.id; });
+                        var search_filter = { discord_id: { $in: ids_to_find } };
+                        dbo.collection("ork_ids").find(search_filter).toArray(function (err, orkResults) {
+                            var discord_players = [];
+                            var ork_players = [];
+                            result.participants.forEach(function (aParticipant) {
+                                var orkInfo = orkResults.find(function (orkUser) {
+                                    return orkUser.discord_id === aParticipant.id;
+                                });
+                                discord_players.push(aParticipant.username);
+                                if (orkInfo) {
+                                    ork_players.push(orkInfo.ork_id);
+                                } else {
+                                    ork_players.push(" -- ");
+                                }
+                            });
+                            var statusEmbed = {
+                                color: 3447003,
+                                title: "Event attendance",
+                                fields: []
+                            };
+                            statusEmbed.fields.push({ name: "Tracking time", value: timeConversion(Date.now() - result.start_time), inline: false });
+                            statusEmbed.fields.push({ name: "Discord name", value: discord_players, inline: true });
+                            statusEmbed.fields.push({ name: "ORK name", value: ork_players, inline: true });
+                            message.reply({ embed: statusEmbed });
+                            dbo.collection("attendance").deleteOne({ event_track: serverID }, function (err, result) {
+                                db.close();
+                            });
+                        });
+                    });
+                });
+                break;
+            }
             // console.log("members");
             // console.log(JSON.stringify(message.guild.members));
             // console.log("members.cache");
-            console.log("all members");
-            message.guild.members.cache.forEach(function (aUser) {
-                console.log(JSON.stringify(aUser.user));
-                console.log(aUser.user.username + ": " + aUser.presence.status);
-            });
+            // console.log("all members");
+            // message.guild.members.cache.forEach(function (aUser) {
+            //     console.log(JSON.stringify(aUser.user));
+            //     console.log(aUser.user.username + ": " + aUser.presence.status);
+            // });
             // console.log(JSON.stringify(message.guild.members.cache));
             // console.log("client.users");
             // console.log(JSON.stringify(client.users));
@@ -308,7 +482,7 @@ client.on("message", async message => {
             helpEmbed.fields.push({ name: "!ab myork", value: "Associate your discord account with your ORK account", inline: false });
             helpEmbed.fields.push({ name: "!ab player", value: "Look up an Amtgard player in the ORK", inline: false });
             helpEmbed.fields.push({ name: "!ab spell", value: "Look up an Amtgard spell and display the information about it", inline: false });
-            // helpEmbed.fields.push({ name: "!ab attendance", value: "Start tracking attendance for an online event", inline: false });
+            helpEmbed.fields.push({ name: "!ab attendance", value: "Start tracking attendance for an online event", inline: false });
             helpEmbed.fields.push({ name: "!ab help", value: "Show this help information", inline: false });
             helpEmbed.footer = { text: "Contact Ken Walker on Facebook for help" };
             message.reply({ embed: helpEmbed });
@@ -323,6 +497,25 @@ function strip_html_tags(str) {
     else
         str = str.toString();
     return str.replace(/<[^>]*>/g, '');
+}
+
+function timeConversion(milliseconds) {
+    //Get hours from milliseconds
+    var hours = milliseconds / (1000 * 60 * 60);
+    var absoluteHours = Math.floor(hours);
+    var h = absoluteHours > 9 ? absoluteHours : '0' + absoluteHours;
+
+    //Get remainder from hours and convert to minutes
+    var minutes = (hours - absoluteHours) * 60;
+    var absoluteMinutes = Math.floor(minutes);
+    var m = absoluteMinutes > 9 ? absoluteMinutes : '0' + absoluteMinutes;
+
+    //Get remainder from minutes and convert to seconds
+    var seconds = (minutes - absoluteMinutes) * 60;
+    var absoluteSeconds = Math.floor(seconds);
+    var s = absoluteSeconds > 9 ? absoluteSeconds : '0' + absoluteSeconds;
+
+    return h + ':' + m + ':' + s;
 }
 
 client.login(config.token);
