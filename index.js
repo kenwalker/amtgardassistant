@@ -23,7 +23,7 @@ const config = require("./config.json");
 var allSpells = require('./spells.json');
 
 client.on("ready", () => {
-    client.user.setActivity(`!ab help`);
+    client.user.setActivity('!' + config.app + ' help');
     console.log("BOT Active");
 });
 
@@ -78,7 +78,7 @@ client.on("message", async message => {
     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
     const amtbot = args.shift().toLowerCase();
 
-    if (amtbot !== 'ab') {
+    if (amtbot !== config.app) {
         return;
     }
     var command = "help";
@@ -483,6 +483,7 @@ client.on("message", async message => {
             helpEmbed.fields.push({ name: "!ab player", value: "Look up an Amtgard player in the ORK", inline: false });
             helpEmbed.fields.push({ name: "!ab spell", value: "Look up an Amtgard spell and display the information about it", inline: false });
             helpEmbed.fields.push({ name: "!ab attendance", value: "Start tracking attendance for an online event", inline: false });
+            helpEmbed.fields.push({ name: "!ab roll", value: "Generate a random integer between 1 and the provided integer parameter", inline: false });
             helpEmbed.fields.push({ name: "!ab help", value: "Show this help information", inline: false });
             helpEmbed.footer = { text: "Contact Ken Walker on Facebook for help" };
             message.reply({ embed: helpEmbed });
