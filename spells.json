@@ -797,7 +797,7 @@
       "e": "Verbal becomes 50'. Only works on verbals with a range of 20'"
     },
   
-    "fightaftereeath": {
+    "fightafterdeath": {
       "name": "Fight After Death",
       "keywords": "barbarian sorcery",
       "classes": {
