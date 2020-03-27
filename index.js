@@ -451,17 +451,18 @@ client.on("message", async message => {
         default:
             var helpEmbed = {
                 color: 3447003,
-                title: "!ab",
+                title: "AmtBot - Click here for the Facebook Page",
                 description: "Amtgard bot for discord. Various commands to help with immersion. See the growing list of commands below.",
                 fields: []
             };
             helpEmbed.fields.push({ name: "!ab myork", value: "Associate your discord account with your ORK account", inline: false });
             helpEmbed.fields.push({ name: "!ab player", value: "Look up an Amtgard player in the ORK", inline: false });
             helpEmbed.fields.push({ name: "!ab spell", value: "Look up an Amtgard spell and display the information about it", inline: false });
-            helpEmbed.fields.push({ name: "!ab attendance", value: "Start tracking attendance for an online event", inline: false });
+            helpEmbed.fields.push({ name: "!ab attendance", value: "(Being rewritten!) Start tracking attendance for an online event", inline: false });
             helpEmbed.fields.push({ name: "!ab roll", value: "Generate a random integer between 1 and the provided integer parameter", inline: false });
             helpEmbed.fields.push({ name: "!ab help", value: "Show this help information", inline: false });
-            helpEmbed.footer = { text: "Contact Ken Walker on Facebook for help" };
+            helpEmbed.footer = { text: "Written by Ken Walker - Lord Kismet of Felfrost" };
+            helpEmbed.url = 'https://www.facebook.com/discordamtbot/';
             message.reply({ embed: helpEmbed });
             break;
     }
