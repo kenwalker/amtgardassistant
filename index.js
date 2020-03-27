@@ -158,7 +158,7 @@ client.on("message", async message => {
                     participants.push(userRecord);
                     var newRecord = { event_track: serverID, start_time: Date.now(), participants: participants };
                     dbo.collection("attendance").insertOne(newRecord, function (err, result) {
-                        message.reply("Starting to track attendance. Players use the addme option to add to attendee list");
+                        message.reply("Starting to track attendance. Players can add themselves with the **!ab attendance addme** option. You have already been added.");
                     });
                 });
                 break;
