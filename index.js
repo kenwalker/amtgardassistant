@@ -104,7 +104,7 @@ client.on("message", async message => {
                 });
                 return;
             }
-            if (args.length === 2 && args[0] === 'id') {
+            if (args.length >= 2 && args[0] === 'id') {
                 var playerSearch = args.slice(1).join(" ");
                 jsork.searchservice.searchPlayer(playerSearch).then(function (players) {
                     if (!players.length) {
