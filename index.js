@@ -22,37 +22,15 @@ MongoClient.connect(url, function (err, db) {
 const client = new Discord.Client();
 
 const config = require("./config.json");
-// config.token contains the bot's token
+// config.token contains the bot's token.
 // config.prefix contains the message prefix.
+// config.app contains the app name that is triggered after the prefix.
 
 var allSpells = require('./spells.json');
 
 client.on("ready", () => {
     client.user.setActivity('!' + config.app + ' help (' + client.guilds.cache.size + ' servers)');
     console.log("Ready");
-});
-
-client.on("presenceUpdate", (oldMember, newMember) => {
-    if (newMember.user.presence.status === "online") {
-        dbo.collection("attendance").findOne({ event_track: newMember.guild.id }, function (err, result) {
-            if (err || !result) {
-                return;
-            }
-            var foundItem = result.participants.find(function (participant) {
-                return participant.id === newMember.user.id;
-            });
-            if (!foundItem) {
-                var userRecord = {
-                    username: newMember.user.username,
-                    id: newMember.user.id
-                };
-                result.participants.push(userRecord);
-                var myobj = { $set: { participants: result.participants } };
-                dbo.collection("attendance").updateOne({ event_track: newMember.guild.id }, myobj, function (err, res) {
-                });
-            }
-        });
-    }
 });
 
 client.on("message", async message => {
@@ -144,8 +122,6 @@ client.on("message", async message => {
             message.reply({ embed: helpEmbed });
             break;
         case "attendance":
-            // console.log("message");
-            // console.log(JSON.stringify(message));
             var serverID = message.guild.id;
             if (args.length === 0) {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
@@ -153,10 +129,11 @@ client.on("message", async message => {
                     var helpEmbed = {
                         color: 3447003,
                         title: "!ab attendance",
-                        description: "Track attendance for a discord event. Adds the current users and any users who join before stopping the tracking",
+                        description: "Track attendance for a discord event. Once started players add themselves with the **!ab attendance addme** option",
                         fields: []
                     };
                     helpEmbed.fields.push({ name: "!ab attendance start", value: "Starts tracking attendance until stop is issued", inline: false });
+                    helpEmbed.fields.push({ name: "!ab attendance addme", value: "Add yourself to the attendee list", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance status", value: "Shows the curret attendance status", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance stop", value: "Stops tracking attendance and shows the participant list", inline: false });
                     if (result !== null) {
@@ -174,18 +151,14 @@ client.on("message", async message => {
                         return;
                     }
                     var participants = [];
-                    message.guild.members.cache.forEach(function (aUser) {
-                        if (aUser.presence.status === "online" && !aUser.user.bot) {
-                            var userRecord = {
-                                username: aUser.user.username,
-                                id: aUser.user.id
-                            };
-                            participants.push(userRecord);
-                        }
-                    });
+                    var userRecord = {
+                        username: message.author.username,
+                        id: message.author.id
+                    };
+                    participants.push(userRecord);
                     var newRecord = { event_track: serverID, start_time: Date.now(), participants: participants };
                     dbo.collection("attendance").insertOne(newRecord, function (err, result) {
-                        message.reply("Starting to track attendance");
+                        message.reply("Starting to track attendance. Players use the addme option to add to attendee list");
                     });
                 });
                 break;
@@ -222,6 +195,33 @@ client.on("message", async message => {
                         statusEmbed.fields.push({ name: "Discord name", value: discord_players, inline: true });
                         statusEmbed.fields.push({ name: "ORK name", value: ork_players, inline: true });
                         message.reply({ embed: statusEmbed });
+                    });
+                });
+                break;
+            }
+            if (args.length === 1 && args[0] === "addme") {
+                dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
+                    if (err) throw err;
+                    if (result === null) {
+                        message.reply("There is no active tracking session in progress");
+                        return;
+                    }
+                    message.author.id
+                    var alreadyTracked = result.participants.find(function (aParticipant) {
+                        return aParticipant.id === message.author.id;
+                    });
+                    if (alreadyTracked) {
+                        message.reply("You are already on the attendee list");
+                        return;
+                    }
+                    var userRecord = {
+                        username: message.author.username,
+                        id: message.author.id
+                    };
+                    result.participants.push(userRecord);
+                    var myobj = { $set: { participants: result.participants } };
+                    dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                        message.reply("You've been added to the attendee list");
                     });
                 });
                 break;
@@ -270,40 +270,12 @@ client.on("message", async message => {
                 });
                 break;
             }
-            // console.log("members");
-            // console.log(JSON.stringify(message.guild.members));
-            // console.log("members.cache");
-            // console.log("all members");
-            // message.guild.members.cache.forEach(function (aUser) {
-            //     console.log(JSON.stringify(aUser.user));
-            //     console.log(aUser.user.username + ": " + aUser.presence.status);
-            // });
-            // console.log(JSON.stringify(message.guild.members.cache));
-            // console.log("client.users");
-            // console.log(JSON.stringify(client.users));
-            // console.log("client.users.cache");
-            // console.log(JSON.stringify(client.users.cache));
-            // console.log("client.users as array");
-            // console.log(JSON.stringify(client.users.cache.array()));
-
-            // console.log("all users?");
-            // client.users.cache.forEach(function(aUser) {
-            //     console.log(JSON.stringify(aUser));
-            // });
-
-            // console.log(JSON.stringify(client.users.cache[0]));
-            // guild = client.guilds.get(message.guildID);
-            // console.log("guild");
-            // console.log(guild);
-            // console.log("online");
-            // console.log(message.guild.members.filter(m => m.presence.status === 'online'));
             break;
         case "roll":
             var dieNumber = Number(args[0]);
             if (args.length === 1 && /^\d+$/.test(args[0]) && dieNumber > 0) {
                 var randomInteger = Math.floor(Math.random() * Math.floor(dieNumber)) + 1;
                 message.reply("Roll " + dieNumber + " and get " + randomInteger);
-                // message.author.send("Roll " + dieNumber + " and get " + randomInteger);
             } else {
                 message.reply("Provide a number to randomize. Eg. *!ab roll 20*");
                 return;
@@ -436,7 +408,7 @@ client.on("message", async message => {
         case "servers":
             var allServers = [];
             var allRegions = [];
-            client.guilds.cache.forEach(function(aGuild) {
+            client.guilds.cache.forEach(function (aGuild) {
                 allServers.push(aGuild.name);
                 allRegions.push(aGuild.region || " ");
             });
@@ -462,7 +434,7 @@ client.on("message", async message => {
             helpEmbed.fields.push({ name: "!ab myork", value: "Associate your discord account with your ORK account", inline: false });
             helpEmbed.fields.push({ name: "!ab player", value: "Look up an Amtgard player in the ORK", inline: false });
             helpEmbed.fields.push({ name: "!ab spell", value: "Look up an Amtgard spell and display the information about it", inline: false });
-            helpEmbed.fields.push({ name: "!ab attendance", value: "(Being rewritten!) Start tracking attendance for an online event", inline: false });
+            helpEmbed.fields.push({ name: "!ab attendance", value: "Start tracking attendance for an online event", inline: false });
             helpEmbed.fields.push({ name: "!ab roll", value: "Generate a random integer between 1 and the provided integer parameter", inline: false });
             helpEmbed.fields.push({ name: "!ab help", value: "Show this help information", inline: false });
             helpEmbed.footer = { text: "Written by Ken Walker - Lord Kismet of Felfrost" };
