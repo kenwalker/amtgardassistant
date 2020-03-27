@@ -5,6 +5,8 @@ const https = require('https');
 var MongoClient = require('mongodb').MongoClient;
 var url = "mongodb://localhost:27017/";
 var dbo = null;
+var launchTime = Date.now();
+var totalMessages = 0;
 
 MongoClient.connect(url, function (err, db) {
     if (err) throw err;
@@ -76,6 +78,7 @@ client.on("message", async message => {
     if (amtbot !== config.app) {
         return;
     }
+    totalMessages++;
     var command = "help";
     if (args.length !== 0) {
         command = args.shift().toLowerCase();
@@ -439,12 +442,13 @@ client.on("message", async message => {
             });
             var serversEmbed = {
                 color: 3447003,
-                title: "!ab servers",
                 description: "AmtBot is active on these servers",
                 fields: []
             };
             serversEmbed.fields.push({ name: "Server", value: allServers, inline: true });
             serversEmbed.fields.push({ name: "Region", value: allRegions, inline: true });
+            serversEmbed.fields.push({ name: "Last restart", value: timeConversion(Date.now() - launchTime), inline: false });
+            serversEmbed.fields.push({ name: "Messages Processed", value: totalMessages, inline: false });
             message.channel.send({ embed: serversEmbed });
             break;
         case "help":
