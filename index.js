@@ -33,6 +33,15 @@ client.on("ready", () => {
     console.log("Ready");
 });
 
+client.on("guildCreate", guild => {
+    client.user.setActivity('!' + config.app + ' help (' + client.guilds.cache.size + ' servers)');
+});
+
+//removed from a server
+client.on("guildDelete", guild => {
+    client.user.setActivity('!' + config.app + ' help (' + client.guilds.cache.size + ' servers)');
+});
+
 client.on("message", async message => {
     // This event will run on every single message received, from any channel or DM.
 
@@ -68,10 +77,14 @@ client.on("message", async message => {
                 dbo.collection("ork_ids").findOne({ discord_id: message.author.id }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
-                        message.reply("Associate an ORK Id using *!ab myork id [ork_username]*");
+                        message.reply("Associate an ORK Id using **!ab myork id *ork_username***. See **!ab myork help** for examples.").then(function(reply) {
+                            reply.delete({ timeout: 10000 });
+                        });
                         return;
                     }
-                    message.reply("Your associated ORK ID is [" + result.ork_id + "] You can remove it with !ab myork remove_id");
+                    message.reply("Your associated ORK Id is *" + result.ork_id + "*. See other options with **!ab myork help**").then(function(reply) {
+                        reply.delete({ timeout: 6000 });
+                    });
                 });
                 return;
             }
@@ -79,7 +92,7 @@ client.on("message", async message => {
                 var playerSearch = args.slice(1).join(" ");
                 jsork.searchservice.searchPlayer(playerSearch).then(function (players) {
                     if (!players.length) {
-                        message.reply("no matches for [" + playerSearch + "]");
+                        message.reply("no matches for *" + playerSearch + "*");
                         return;
                     }
                     if (players.length > 1) {
@@ -97,7 +110,7 @@ client.on("message", async message => {
                     var myobj = { $set: { discord_id: message.author.id, ork_id: player.UserName, ork_mundane_id: player.MundaneId } };
                     dbo.collection("ork_ids").updateOne({ discord_id: message.author.id }, myobj, { upsert: true }, function (err, res) {
                         if (err) throw err;
-                        message.reply("Your discord account is now associated with the ORK id " + player.UserName);
+                        message.reply("your discord account is now associated with the ORK id *" + player.UserName + "*");
                     });
                 });
                 return;
@@ -105,21 +118,32 @@ client.on("message", async message => {
             if (args.length === 1 && args[0] === 'remove_id') {
                 dbo.collection("ork_ids").deleteOne({ discord_id: message.author.id }, function (err, res) {
                     if (err) throw err;
-                    message.reply("Your discord account is no longer associated with an ORK id");
+                    message.reply("Your discord account is no longer associated with an ORK id").then(function(reply) {
+                        reply.delete({ timeout: 4000 });
+                    });
                 });
                 return;
             }
             var helpEmbed = {
                 color: 3447003,
                 title: "!ab myork",
-                description: "Associate your discord account with an ORK account",
+                description: "Associate your discord account with an ORK id. You only have to do this on one server, it will apply across them all.",
                 fields: []
             };
-            helpEmbed.fields.push({ name: "!ab myork", value: "Displays your associated ORK account", inline: false });
-            helpEmbed.fields.push({ name: "!ab myork id [ork_player_name]", value: "Associate your discord account with an ORK account", inline: false });
+            var idHelp = [];
+            idHelp.push("Associate your discord account with an ORK id. You can use filters to limit to Kingdom or Park");
+            idHelp.push("*Examples:*");
+            idHelp.push("**!ab myork id lord_kismet_shenchu** (An exact match)");
+            idHelp.push("**!ab myork id nb: varen** (Only look in Nine Blades)");
+            idHelp.push("**!ab myork id kop:et fluffy** (Only look in Kingdom of Polaris, Ethereal Tiles)");
+            idHelp.push("If your username has a hyphen, try only using the last part of the name");
+            helpEmbed.fields.push({ name: "!ab myork", value: "Displays your associated ORK id", inline: false });
+            helpEmbed.fields.push({ name: "!ab myork id *ork_username*", value: idHelp, inline: false });
             helpEmbed.fields.push({ name: "!ab myork remove_id", value: "Remove any association between your discord account and the ORK", inline: false });
-            helpEmbed.fields.push({ name: "!ab myork help", value: "Displays this help.", inline: false });
-            message.reply({ embed: helpEmbed });
+            helpEmbed.fields.push({ name: "!ab myork help", value: "Displays this help (removed after 30 seconds_).", inline: false });
+            message.reply({ embed: helpEmbed }).then(function(reply) {
+                reply.delete({ timeout: 30000 });
+            });
             break;
         case "attendance":
             var serverID = message.guild.id;
@@ -147,7 +171,9 @@ client.on("message", async message => {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result !== null) {
-                        message.reply("There's an ACTIVE tracking session started " + timeConversion(Date.now() - result.start_time) + " ago");
+                        message.reply("There's an ACTIVE tracking session started " + timeConversion(Date.now() - result.start_time) + " ago").then(function(reply) {
+                            reply.delete({ timeout: 4000 });
+                        });
                         return;
                     }
                     var participants = [];
@@ -167,7 +193,9 @@ client.on("message", async message => {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
-                        message.reply("There is no active tracking session in progress");
+                        message.reply("There is no active tracking session in progress").then(function(reply) {
+                            reply.delete({ timeout: 4000 });
+                        });
                         return;
                     }
                     var ids_to_find = result.participants.map(function (aUser) { return aUser.id; });
@@ -199,11 +227,13 @@ client.on("message", async message => {
                 });
                 break;
             }
-            if (args.length === 1 && args[0] === "addme") {
+            if ((args.length === 1 && args[0] === "addme") || (args.length === 2 && args[0] === "add" && args[1] === "me")) {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
-                        message.reply("There is no active tracking session in progress");
+                        message.reply("There is no active tracking session in progress").then(function(reply) {
+                            reply.delete({ timeout: 4000 });
+                        });
                         return;
                     }
                     message.author.id
@@ -211,7 +241,9 @@ client.on("message", async message => {
                         return aParticipant.id === message.author.id;
                     });
                     if (alreadyTracked) {
-                        message.reply("You are already on the attendee list");
+                        message.reply("You are already on the attendee list").then(function(reply) {
+                            reply.delete({ timeout: 4000 });
+                        });
                         return;
                     }
                     var userRecord = {
@@ -230,7 +262,9 @@ client.on("message", async message => {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
-                        message.reply("There is no active tracking session in progress");
+                        message.reply("There is no active tracking session in progress").then(function(reply) {
+                            reply.delete({ timeout: 4000 });
+                        });
                         return;
                     }
                     if (result.participants.length === 0) {
@@ -275,9 +309,11 @@ client.on("message", async message => {
             var dieNumber = Number(args[0]);
             if (args.length === 1 && /^\d+$/.test(args[0]) && dieNumber > 0) {
                 var randomInteger = Math.floor(Math.random() * Math.floor(dieNumber)) + 1;
-                message.reply("Roll " + dieNumber + " and get " + randomInteger);
+                message.reply("rolled " + dieNumber + " and got " + randomInteger);
             } else {
-                message.reply("Provide a number to randomize. Eg. *!ab roll 20*");
+                message.reply("Provide a number to randomize. Eg. *!ab roll 20*").then(function(reply) {
+                    reply.delete({ timeout: 6000 });
+                });
                 return;
             }
             break;
@@ -285,20 +321,24 @@ client.on("message", async message => {
             if (args.length === 0) {
                 var helpEmbed = {
                     color: 3447003,
-                    title: "!ab spell [search term]",
+                    title: "!ab spell *search_term*",
                     description: "Look up an Amtgard spell by name. The lookup is by a concatenated short name.",
                     fields: []
                 };
                 helpEmbed.fields.push({ name: "!ab spell heatweapon", value: "An exact match for the spell", inline: false });
                 helpEmbed.fields.push({ name: "!ab spell ball", value: "Will show multiple results to pick from", inline: false });
-                helpEmbed.fields.push({ name: "!ab spell", value: "Displays this help.", inline: false });
-                message.reply({ embed: helpEmbed });
+                helpEmbed.fields.push({ name: "!ab spell", value: "Displays this help. _This help is removed after 30 seconds_", inline: false });
+                message.reply({ embed: helpEmbed }).then(function(reply) {
+                    reply.delete({ timeout: 30000 });
+                });
                 return;
             }
             var aSpell = args[0];
             fuzzyResults = FuzzySort.go(aSpell, Object.keys(allSpells));
             if (!fuzzyResults.length) {
-                message.reply("no matches for [" + aSpell + "]");
+                message.reply("no matches for _" + aSpell + "_").then(function(reply) {
+                    reply.delete({ timeout: 6000 });
+                });
                 return;
             }
             if (fuzzyResults.length > 1 && fuzzyResults[0].score !== 0) {
@@ -309,7 +349,9 @@ client.on("message", async message => {
                         chooseFrom += ", ";
                     }
                 });
-                message.reply(chooseFrom);
+                message.reply(chooseFrom).then(function(reply) {
+                    reply.delete({ timeout: 12000 });
+                });
                 return;
             }
 
@@ -355,14 +397,29 @@ client.on("message", async message => {
             break;
         case "player":
             if (args.length === 0) {
-                message.reply("Provide a player to display. Eg. *!ab player lord_kismet_shenchu*");
+                var helpEmbed = {
+                    color: 3447003,
+                    title: "!ab player *ork_username*",
+                    description: "Provide an ORK username to display the stats for. You can use filters to limit to a Kingdom or Park search.",
+                    fields: []
+                };
+                var idHelp = [];
+                idHelp.push("**!ab player lord_kismet_shenchu** (An exact match)");
+                idHelp.push("**!ab player nb: varen** (Only look in Nine Blades)");
+                idHelp.push("**!ab player kop:et fluffy** (Only look in Kingdom of Polaris, Ethereal Tiles)");
+                idHelp.push("If your username has a hyphen, try only using the last part of the name");
+                idHelp.push("_this message will be removed in 30 seconds_");
+                helpEmbed.fields.push({ name: "*Examples:*", value: idHelp, inline: false });
+                message.reply({ embed: helpEmbed }).then(function(reply) {
+                    reply.delete({ timeout: 30000 });
+                });
                 return;
             }
             var playerSearch = args.join(' ');
 
             jsork.searchservice.searchPlayer(playerSearch).then(function (players) {
                 if (!players.length) {
-                    message.reply("no matches for [" + playerSearch + "]");
+                    message.reply("no matches for _" + playerSearch + "_");
                     return;
                 }
                 if (players.length > 1) {
@@ -386,20 +443,11 @@ client.on("message", async message => {
                     };
                     playerEmbed.fields.push({ name: "Park", value: player.ParkName, inline: true });
                     playerEmbed.fields.push({ name: "Kingdom", value: player.KingdomName, inline: true });
+                    var classInfo = classes.map(function (aClass) {
+                        return aClass.class + " - Level " + aClass.level + " - Credits " + aClass.credits + "";
+                    });
                     playerEmbed.fields.push(
-                        { name: '\u200B', value: '\u200B' }
-                    );
-                    var classNames = classes.map(function (aClass) { return aClass.class });
-                    var classLevels = classes.map(function (aClass) { return aClass.level });
-                    var classCredits = classes.map(function (aClass) { return aClass.credits });
-                    playerEmbed.fields.push(
-                        { name: "Class", value: classNames, inline: true }
-                    );
-                    playerEmbed.fields.push(
-                        { name: "Level", value: classLevels, inline: true }
-                    );
-                    playerEmbed.fields.push(
-                        { name: "Credits", value: classCredits, inline: true }
+                        { name: "Classes", value: classInfo, inline: false }
                     );
                     message.channel.send({ embed: playerEmbed });
                 });
@@ -414,7 +462,7 @@ client.on("message", async message => {
             });
             var serversEmbed = {
                 color: 3447003,
-                description: "AmtBot is active on these servers",
+                description: "AmtBot is active on these " + allServers.length + " servers",
                 fields: []
             };
             serversEmbed.fields.push({ name: "Server", value: allServers, inline: true });
@@ -431,13 +479,13 @@ client.on("message", async message => {
                 description: "Amtgard bot for discord. Various commands to help with immersion. See the growing list of commands below.",
                 fields: []
             };
-            helpEmbed.fields.push({ name: "!ab myork", value: "Associate your discord account with your ORK account", inline: false });
+            helpEmbed.fields.push({ name: "!ab myork", value: "Associate your discord account with your ORK id", inline: false });
             helpEmbed.fields.push({ name: "!ab player", value: "Look up an Amtgard player in the ORK", inline: false });
             helpEmbed.fields.push({ name: "!ab spell", value: "Look up an Amtgard spell and display the information about it", inline: false });
             helpEmbed.fields.push({ name: "!ab attendance", value: "Start tracking attendance for an online event", inline: false });
             helpEmbed.fields.push({ name: "!ab roll", value: "Generate a random integer between 1 and the provided integer parameter", inline: false });
             helpEmbed.fields.push({ name: "!ab help", value: "Show this help information", inline: false });
-            helpEmbed.footer = { text: "Written by Ken Walker - Lord Kismet of Felfrost" };
+            helpEmbed.footer = { text: "Written by Kismet (Easygard, mORK, jsork, AmtQuest, AmtBot)" };
             helpEmbed.url = 'https://www.facebook.com/discordamtbot/';
             message.reply({ embed: helpEmbed });
             break;
