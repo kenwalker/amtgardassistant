@@ -7,6 +7,25 @@ var url = "mongodb://localhost:27017/";
 var dbo = null;
 var launchTime = Date.now();
 var totalMessages = 0;
+var allClasses = [
+    'Anti-Paladin',
+    'Archer',
+    'Assassin',
+    'Barbarian',
+    'Bard',
+    'Color',
+    'Druid',
+    'Healer',
+    'Monk',
+    'Monster',
+    'Paladin',
+    'Peasant',
+    'Reeve',
+    'Scout',
+    'Warrior',
+    'Wizard'
+];
+
 
 MongoClient.connect(url, function (err, db) {
     if (err) throw err;
@@ -77,13 +96,13 @@ client.on("message", async message => {
                 dbo.collection("ork_ids").findOne({ discord_id: message.author.id }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
-                        message.reply("Associate an ORK Id using **!ab myork id *ork_username***. See **!ab myork help** for examples.").then(function(reply) {
-                            reply.delete({ timeout: 10000 });
+                        message.reply("Associate an ORK Id using **!ab myork id *ork_username***. See **!ab myork help** for examples.").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 10000 }) };
                         });
                         return;
                     }
-                    message.reply("Your associated ORK Id is *" + result.ork_id + "*. See other options with **!ab myork help**").then(function(reply) {
-                        reply.delete({ timeout: 6000 });
+                    message.reply("Your associated ORK Id is *" + result.ork_id + "*. See other options with **!ab myork help**").then(function (reply) {
+                        if (!reply.deleted) { reply.delete({ timeout: 6000 }); }
                     });
                 });
                 return;
@@ -92,34 +111,66 @@ client.on("message", async message => {
                 var playerSearch = args.slice(1).join(" ");
                 jsork.searchservice.searchPlayer(playerSearch).then(function (players) {
                     if (!players.length) {
-                        message.reply("no matches for *" + playerSearch + "*");
-                        return;
-                    }
-                    if (players.length > 1) {
-                        var chooseFrom = "Multiple players: ";
-                        players.forEach(function (aResult, index) {
-                            chooseFrom += "*" + aResult.UserName + "*";
-                            if (index < players.length - 1) {
-                                chooseFrom += ", ";
-                            }
+                        message.reply("no matches for _" + playerSearch + "_").then(function (reply) {
+                            reply.delete({ timeout: 4000 });
                         });
-                        message.reply(chooseFrom);
                         return;
                     }
-                    var player = players[0];
-                    var myobj = { $set: { discord_id: message.author.id, ork_id: player.UserName, ork_mundane_id: player.MundaneId } };
-                    dbo.collection("ork_ids").updateOne({ discord_id: message.author.id }, myobj, { upsert: true }, function (err, res) {
-                        if (err) throw err;
-                        message.reply("your discord account is now associated with the ORK id *" + player.UserName + "*");
-                    });
+                    if (players.length > 10) {
+                        var tooManyResults = "Too many results. Try limiting your search to your kingdom and/or park. Look at **!ab myork help** for player filter suggestions";
+                        message.reply(tooManyResults).then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 30000 }); }
+                        });
+                        return;
+                    }
+                    var associatePlayer = function (aPlayer) {
+                        var myobj = { $set: { discord_id: message.author.id, ork_id: aPlayer.UserName, ork_mundane_id: aPlayer.MundaneId } };
+                        dbo.collection("ork_ids").updateOne({ discord_id: message.author.id }, myobj, { upsert: true }, function (err, res) {
+                            if (err) throw err;
+                            message.reply("your discord account is now associated with the ORK id *" + aPlayer.UserName + "*").then(function (reply) {
+                                if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                            });
+                        });
+                    };
+
+                    if (players.length > 1) {
+                        var chooseFrom = "\nChoose from multiple results, 0 to exit: ";
+                        players.forEach(function (aResult, index) {
+                            chooseFrom += "\n" + (index + 1) + ") *" + aResult.UserName + "* (" + aResult.Persona + ")" + " - " + aResult.KingdomName + " - " + aResult.ParkName;
+                        });
+                        message.reply(chooseFrom).then(function (replyMessage) {
+                            const collector = new Discord.MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
+                            collector.on('collect', message => {
+                                var userChoice = 0;
+                                if (/^\d+$/.test(message.content)) {
+                                    userChoice = Number(message.content);
+                                }
+                                if (userChoice > players.length || userChoice === 0) {
+                                    if (!replyMessage.deleted) { replyMessage.delete(); }
+                                    return;
+                                }
+                                if (!replyMessage.deleted) {
+                                    replyMessage.delete();
+                                }
+                                associatePlayer(players[userChoice - 1]);
+                            });
+                            collector.on('end', endMessage => {
+                                if (!replyMessage.deleted) {
+                                    replyMessage.delete();
+                                }
+                            });
+                        });
+                        return;
+                    }
+                    associatePlayer(players[0]);
                 });
                 return;
             }
             if (args.length === 1 && args[0] === 'remove_id') {
                 dbo.collection("ork_ids").deleteOne({ discord_id: message.author.id }, function (err, res) {
                     if (err) throw err;
-                    message.reply("Your discord account is no longer associated with an ORK id").then(function(reply) {
-                        reply.delete({ timeout: 4000 });
+                    message.reply("Your discord account is no longer associated with an ORK id").then(function (reply) {
+                        if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
                     });
                 });
                 return;
@@ -141,8 +192,8 @@ client.on("message", async message => {
             helpEmbed.fields.push({ name: "!ab myork id *ork_username*", value: idHelp, inline: false });
             helpEmbed.fields.push({ name: "!ab myork remove_id", value: "Remove any association between your discord account and the ORK", inline: false });
             helpEmbed.fields.push({ name: "!ab myork help", value: "Displays this help (removed after 30 seconds_).", inline: false });
-            message.reply({ embed: helpEmbed }).then(function(reply) {
-                reply.delete({ timeout: 30000 });
+            message.reply({ embed: helpEmbed }).then(function (reply) {
+                if (!reply.deleted) { reply.delete({ timeout: 30000 }); }
             });
             break;
         case "attendance":
@@ -171,20 +222,20 @@ client.on("message", async message => {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result !== null) {
-                        message.reply("There's an ACTIVE tracking session started " + timeConversion(Date.now() - result.start_time) + " ago").then(function(reply) {
-                            reply.delete({ timeout: 4000 });
+                        message.reply("There's an ACTIVE tracking session started " + timeConversion(Date.now() - result.start_time) + " ago").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
                         });
                         return;
                     }
                     var participants = [];
-                    var userRecord = {
-                        username: message.author.username,
-                        id: message.author.id
-                    };
-                    participants.push(userRecord);
+                    // var userRecord = {
+                    //     username: message.author.username,
+                    //     id: message.author.id
+                    // };
+                    // participants.push(userRecord);
                     var newRecord = { event_track: serverID, start_time: Date.now(), participants: participants };
                     dbo.collection("attendance").insertOne(newRecord, function (err, result) {
-                        message.reply("Starting to track attendance. Players can add themselves with the **!ab attendance addme** option. You have already been added.");
+                        message.reply("Starting to track attendance. Everyone, including you, can now add themselves with\n**!ab attendance addme**");
                     });
                 });
                 break;
@@ -193,8 +244,8 @@ client.on("message", async message => {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
-                        message.reply("There is no active tracking session in progress").then(function(reply) {
-                            reply.delete({ timeout: 4000 });
+                        message.reply("There is no active attendance session in progress").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
                         });
                         return;
                     }
@@ -203,6 +254,7 @@ client.on("message", async message => {
                     dbo.collection("ork_ids").find(search_filter).toArray(function (err, orkResults) {
                         var discord_players = [];
                         var ork_players = [];
+                        var chosen_classes = [];
                         result.participants.forEach(function (aParticipant) {
                             var orkInfo = orkResults.find(function (orkUser) {
                                 return orkUser.discord_id === aParticipant.id;
@@ -213,6 +265,7 @@ client.on("message", async message => {
                             } else {
                                 ork_players.push(" -- ");
                             }
+                            chosen_classes.push(aParticipant.chosen_class || " -- ");
                         });
                         var statusEmbed = {
                             color: 3447003,
@@ -222,38 +275,71 @@ client.on("message", async message => {
                         statusEmbed.fields.push({ name: "Tracking time", value: timeConversion(Date.now() - result.start_time), inline: false });
                         statusEmbed.fields.push({ name: "Discord name", value: discord_players, inline: true });
                         statusEmbed.fields.push({ name: "ORK name", value: ork_players, inline: true });
+                        statusEmbed.fields.push({ name: "Chosen Class", value: chosen_classes, inline: true });
                         message.reply({ embed: statusEmbed });
                     });
                 });
                 break;
             }
-            if ((args.length === 1 && args[0] === "addme") || (args.length === 2 && args[0] === "add" && args[1] === "me")) {
+            if (args.length >= 1 && args[0] === "addme") {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
-                        message.reply("There is no active tracking session in progress").then(function(reply) {
-                            reply.delete({ timeout: 4000 });
+                        message.reply("There is no active attendance session in progress").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
                         });
                         return;
                     }
-                    message.author.id
                     var alreadyTracked = result.participants.find(function (aParticipant) {
                         return aParticipant.id === message.author.id;
                     });
                     if (alreadyTracked) {
-                        message.reply("You are already on the attendee list").then(function(reply) {
-                            reply.delete({ timeout: 4000 });
+                        message.reply("You are already on the attendee list").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
                         });
                         return;
                     }
-                    var userRecord = {
-                        username: message.author.username,
-                        id: message.author.id
-                    };
-                    result.participants.push(userRecord);
-                    var myobj = { $set: { participants: result.participants } };
-                    dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
-                        message.reply("You've been added to the attendee list");
+                    // BOB
+                    var chooseFrom = "\nChoose your class, 0 to cancel: \n";
+                    allClasses.forEach(function (aClass, index) {
+                        chooseFrom += (index + 1) + ") *" + aClass + "*";
+                        if (false && (index + 1) % 3 === 0 && index < allClasses.length) {
+                            chooseFrom += "\n";
+                        } else {
+                            chooseFrom += "  ";
+                        }
+                    });
+                    message.reply(chooseFrom).then(function (replyMessage) {
+                        const collector = new Discord.MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
+                        collector.on('collect', message => {
+                            var userChoice = 0;
+                            if (/^\d+$/.test(message.content)) {
+                                userChoice = Number(message.content);
+                            }
+                            if (userChoice > allClasses.length || userChoice === 0) {
+                                if (!replyMessage.deleted) { replyMessage.delete(); }
+                                return;
+                            }
+                            if (!replyMessage.deleted) {
+                                replyMessage.delete();
+                            }
+                            var chosenClass = allClasses[userChoice - 1];
+                            var userRecord = {
+                                username: message.author.username,
+                                id: message.author.id,
+                                chosen_class: chosenClass
+                            };
+                            result.participants.push(userRecord);
+                            var myobj = { $set: { participants: result.participants } };
+                            dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                                message.reply("You've been added to the attendee list as " + chosenClass);
+                            });
+                        });
+                        collector.on('end', endMessage => {
+                            if (!replyMessage.deleted) {
+                                replyMessage.delete();
+                            }
+                        });
                     });
                 });
                 break;
@@ -262,8 +348,8 @@ client.on("message", async message => {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
-                        message.reply("There is no active tracking session in progress").then(function(reply) {
-                            reply.delete({ timeout: 4000 });
+                        message.reply("There is no active attendance session in progress").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
                         });
                         return;
                     }
@@ -278,6 +364,7 @@ client.on("message", async message => {
                     dbo.collection("ork_ids").find(search_filter).toArray(function (err, orkResults) {
                         var discord_players = [];
                         var ork_players = [];
+                        var chosen_classes = [];
                         result.participants.forEach(function (aParticipant) {
                             var orkInfo = orkResults.find(function (orkUser) {
                                 return orkUser.discord_id === aParticipant.id;
@@ -288,6 +375,7 @@ client.on("message", async message => {
                             } else {
                                 ork_players.push(" -- ");
                             }
+                            chosen_classes.push(aParticipant.chosen_class || " -- ");
                         });
                         var statusEmbed = {
                             color: 3447003,
@@ -297,6 +385,7 @@ client.on("message", async message => {
                         statusEmbed.fields.push({ name: "Tracking time", value: timeConversion(Date.now() - result.start_time), inline: false });
                         statusEmbed.fields.push({ name: "Discord name", value: discord_players, inline: true });
                         statusEmbed.fields.push({ name: "ORK name", value: ork_players, inline: true });
+                        statusEmbed.fields.push({ name: "Chosen Class", value: chosen_classes, inline: true });
                         message.reply({ embed: statusEmbed });
                         dbo.collection("attendance").deleteOne({ event_track: serverID }, function (err, result) {
                         });
@@ -311,8 +400,8 @@ client.on("message", async message => {
                 var randomInteger = Math.floor(Math.random() * Math.floor(dieNumber)) + 1;
                 message.reply("rolled " + dieNumber + " and got " + randomInteger);
             } else {
-                message.reply("Provide a number to randomize. Eg. *!ab roll 20*").then(function(reply) {
-                    reply.delete({ timeout: 6000 });
+                message.reply("Provide a number to randomize. Eg. *!ab roll 20*").then(function (reply) {
+                    if (!reply.deleted) { reply.delete({ timeout: 6000 }); }
                 });
                 return;
             }
@@ -328,16 +417,16 @@ client.on("message", async message => {
                 helpEmbed.fields.push({ name: "!ab spell heatweapon", value: "An exact match for the spell", inline: false });
                 helpEmbed.fields.push({ name: "!ab spell ball", value: "Will show multiple results to pick from", inline: false });
                 helpEmbed.fields.push({ name: "!ab spell", value: "Displays this help. _This help is removed after 30 seconds_", inline: false });
-                message.reply({ embed: helpEmbed }).then(function(reply) {
-                    reply.delete({ timeout: 30000 });
+                message.reply({ embed: helpEmbed }).then(function (reply) {
+                    if (!reply.deleted) { reply.delete({ timeout: 30000 }); }
                 });
                 return;
             }
             var aSpell = args[0];
             fuzzyResults = FuzzySort.go(aSpell, Object.keys(allSpells));
             if (!fuzzyResults.length) {
-                message.reply("no matches for _" + aSpell + "_").then(function(reply) {
-                    reply.delete({ timeout: 6000 });
+                message.reply("no matches for _" + aSpell + "_").then(function (reply) {
+                    if (!reply.deleted) { reply.delete({ timeout: 6000 }); }
                 });
                 return;
             }
@@ -349,8 +438,8 @@ client.on("message", async message => {
                         chooseFrom += ", ";
                     }
                 });
-                message.reply(chooseFrom).then(function(reply) {
-                    reply.delete({ timeout: 12000 });
+                message.reply(chooseFrom).then(function (reply) {
+                    if (!reply.deleted) { reply.delete({ timeout: 12000 }); }
                 });
                 return;
             }
@@ -410,47 +499,77 @@ client.on("message", async message => {
                 idHelp.push("If your username has a hyphen, try only using the last part of the name");
                 idHelp.push("_this message will be removed in 30 seconds_");
                 helpEmbed.fields.push({ name: "*Examples:*", value: idHelp, inline: false });
-                message.reply({ embed: helpEmbed }).then(function(reply) {
-                    reply.delete({ timeout: 30000 });
+                message.reply({ embed: helpEmbed }).then(function (reply) {
+                    if (!reply.deleted) { reply.delete({ timeout: 30000 }); }
                 });
                 return;
             }
             var playerSearch = args.join(' ');
 
-            jsork.searchservice.searchPlayer(playerSearch).then(function (players) {
+            jsork.searchservice.searchUsername(playerSearch).then(function (players) {
                 if (!players.length) {
-                    message.reply("no matches for _" + playerSearch + "_");
+                    message.reply("no matches for _" + playerSearch + "_").then(function (reply) {
+                        if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                    });
                     return;
                 }
+                if (players.length > 10) {
+                    var tooManyResults = "Too many results. Try limiting your search to your kingdom and/or park. Look at **!ab myork help** for player filter suggestions";
+                    message.reply(tooManyResults).then(function (reply) {
+                        if (!reply.deleted) { reply.delete({ timeout: 15000 }); }
+                    });
+                    return;
+                }
+                var showPlayer = function (aPlayer) {
+                    jsork.player.getClasses(aPlayer.MundaneId).then(function (classes) {
+                        var playerEmbed = {
+                            color: 3447003,
+                            title: aPlayer.UserName + ' (' + aPlayer.Persona + ')',
+                            url: 'https://ork.amtgard.com/orkui/index.php?Route=Player/index/' + aPlayer.MundaneId,
+                            fields: []
+                        };
+                        playerEmbed.fields.push({ name: "Park", value: aPlayer.ParkName, inline: true });
+                        playerEmbed.fields.push({ name: "Kingdom", value: aPlayer.KingdomName, inline: true });
+                        var classInfo = classes.map(function (aClass) {
+                            return aClass.class + " - Level " + aClass.level + " - Credits " + aClass.credits + "";
+                        });
+                        playerEmbed.fields.push(
+                            { name: "Classes", value: classInfo, inline: false }
+                        );
+                        message.channel.send({ embed: playerEmbed });
+                    });
+                };
+
                 if (players.length > 1) {
-                    var chooseFrom = "Multiple players: ";
+                    var chooseFrom = "\nChoose from multiple results, 0 to exit: ";
                     players.forEach(function (aResult, index) {
-                        chooseFrom += "*" + aResult.UserName + "*";
-                        if (index < players.length - 1) {
-                            chooseFrom += ", ";
-                        }
+                        chooseFrom += "\n" + (index + 1) + ") *" + aResult.UserName + "* (" + aResult.Persona + ")" + " - " + aResult.KingdomName + " - " + aResult.ParkName;
                     });
-                    message.reply(chooseFrom);
+                    message.reply(chooseFrom).then(function (replyMessage) {
+                        const collector = new Discord.MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
+                        collector.on('collect', message => {
+                            var userChoice = 0;
+                            if (/^\d+$/.test(message.content)) {
+                                userChoice = Number(message.content);
+                            }
+                            if (userChoice > players.length || userChoice === 0) {
+                                if (!replyMessage.deleted) { replyMessage.delete(); }
+                                return;
+                            }
+                            if (!replyMessage.deleted) {
+                                replyMessage.delete();
+                            }
+                            showPlayer(players[userChoice - 1]);
+                        });
+                        collector.on('end', endMessage => {
+                            if (!replyMessage.deleted) {
+                                replyMessage.delete();
+                            }
+                        });
+                    });
                     return;
                 }
-                var player = players[0];
-                jsork.player.getClasses(player.MundaneId).then(function (classes) {
-                    var playerEmbed = {
-                        color: 3447003,
-                        title: player.UserName + ' (' + player.Persona + ')',
-                        url: 'https://ork.amtgard.com/orkui/index.php?Route=Player/index/' + player.MundaneId,
-                        fields: []
-                    };
-                    playerEmbed.fields.push({ name: "Park", value: player.ParkName, inline: true });
-                    playerEmbed.fields.push({ name: "Kingdom", value: player.KingdomName, inline: true });
-                    var classInfo = classes.map(function (aClass) {
-                        return aClass.class + " - Level " + aClass.level + " - Credits " + aClass.credits + "";
-                    });
-                    playerEmbed.fields.push(
-                        { name: "Classes", value: classInfo, inline: false }
-                    );
-                    message.channel.send({ embed: playerEmbed });
-                });
+                showPlayer(players[0]);
             });
             break;
         case "servers":

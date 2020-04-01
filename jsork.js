@@ -1209,21 +1209,21 @@ const request = require('request');
         return promise;
     };
 
-    jsork.searchservice.searchPlayerUsername = function (userName) {
+    jsork.searchservice.searchUsername = function (searchTerm) {
         var promise = new Promise(function (resolve, reject) {
-            $.getJSON(ork + '?',
-                {
-                    call: 'SearchService/Player',
-                    type: 'USER',
-                    search: userName,
-                    limit: '2000',
-                    Token: jsork.TOKEN
-                },
-                function (data) {
-                    if (data.Status.Status === 0 || data.Status === true) {
-                        resolve(data.Result);
+            var url = ork + '?';
+            url += 'call=SearchService/Player';
+            url += '&type=USER';
+            url += '&search=' + searchTerm;
+            url += '&limit=20';
+            url += 'Token=' + jsork.TOKEN;
+            request(url,
+                function (error, result, data) {
+                    var jsonData = JSON.parse(data);
+                    if (jsonData.Status.Status === 0 || jsonData.Status === true) {
+                        resolve(jsonData.Result);
                     } else {
-                        reject(Error('Call failed ' + JSON.stringify(data)));
+                        reject(Error('Call failed ' + JSON.stringify(jsonData)));
                     }
                 });
         });
