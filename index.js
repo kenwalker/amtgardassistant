@@ -112,7 +112,7 @@ client.on("message", async message => {
                 jsork.searchservice.searchPlayer(playerSearch).then(function (players) {
                     if (!players.length) {
                         message.reply("no matches for _" + playerSearch + "_").then(function (reply) {
-                            reply.delete({ timeout: 4000 });
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
                         });
                         return;
                     }
@@ -208,7 +208,8 @@ client.on("message", async message => {
                         fields: []
                     };
                     helpEmbed.fields.push({ name: "!ab attendance start", value: "Starts tracking attendance until stop is issued", inline: false });
-                    helpEmbed.fields.push({ name: "!ab attendance addme", value: "Add yourself to the attendee list", inline: false });
+                    helpEmbed.fields.push({ name: "!ab attendance addme *optional_class*", value: "Add yourself to the attendee list. You can provide an optional parameter of the class you want", inline: false });
+                    helpEmbed.fields.push({ name: "!ab attendance add", value: "Same as addme, just shorter.", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance status", value: "Shows the curret attendance status", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance stop", value: "Stops tracking attendance and shows the participant list", inline: false });
                     if (result !== null) {
@@ -235,7 +236,7 @@ client.on("message", async message => {
                     // participants.push(userRecord);
                     var newRecord = { event_track: serverID, start_time: Date.now(), participants: participants };
                     dbo.collection("attendance").insertOne(newRecord, function (err, result) {
-                        message.reply("Starting to track attendance. Everyone, including you, can now add themselves with\n**!ab attendance addme**");
+                        message.reply("Starting to track attendance. Everyone, including you, can now add themselves with\n**!ab attendance addme *optional_class* **");
                     });
                 });
                 break;
@@ -281,7 +282,7 @@ client.on("message", async message => {
                 });
                 break;
             }
-            if (args.length >= 1 && args[0] === "addme") {
+            if ((args.length >= 1 && args[0] === "addme") || (args.length >= 1 && args[0] === "add")) {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
@@ -293,14 +294,35 @@ client.on("message", async message => {
                     var alreadyTracked = result.participants.find(function (aParticipant) {
                         return aParticipant.id === message.author.id;
                     });
-                    if (alreadyTracked) {
-                        message.reply("You are already on the attendee list").then(function (reply) {
-                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
-                        });
-                        return;
+                    // Was the class provided as an argument?
+                    if (args.length > 1) {
+                        var chosenClass = allClasses.find(function(item) { return item.toLowerCase() === args[1].toLowerCase() });
+                        if (chosenClass) {
+                            if (alreadyTracked) {
+                                alreadyTracked.chosen_class = chosenClass
+                            } else {
+                                var userRecord = {
+                                    username: message.author.username,
+                                    id: message.author.id,
+                                    chosen_class: chosenClass
+                                };
+                                result.participants.push(userRecord);
+                            }
+                            var myobj = { $set: { participants: result.participants } };
+                            dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                                if (alreadyTracked) {
+                                    message.reply("You've changed your credit to " + chosenClass);
+                                } else {
+                                    message.reply("You've been added to the attendee list as " + chosenClass);
+                                }
+                            });
+                            return;
+                        }
                     }
-                    // BOB
                     var chooseFrom = "\nChoose your class, 0 to cancel: \n";
+                    if (alreadyTracked) {
+                        chooseFrom = "\nYou are already attending as " + alreadyTracked.chosen_class + ". You can choose a new class or 0 to cancel:\n";
+                    }
                     allClasses.forEach(function (aClass, index) {
                         chooseFrom += (index + 1) + ") *" + aClass + "*";
                         if (false && (index + 1) % 3 === 0 && index < allClasses.length) {
@@ -324,15 +346,23 @@ client.on("message", async message => {
                                 replyMessage.delete();
                             }
                             var chosenClass = allClasses[userChoice - 1];
-                            var userRecord = {
-                                username: message.author.username,
-                                id: message.author.id,
-                                chosen_class: chosenClass
-                            };
-                            result.participants.push(userRecord);
+                            if (alreadyTracked) {
+                                alreadyTracked.chosen_class = chosenClass
+                            } else {
+                                var userRecord = {
+                                    username: message.author.username,
+                                    id: message.author.id,
+                                    chosen_class: chosenClass
+                                };
+                                result.participants.push(userRecord);
+                            }
                             var myobj = { $set: { participants: result.participants } };
                             dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
-                                message.reply("You've been added to the attendee list as " + chosenClass);
+                                if (alreadyTracked) {
+                                    message.reply("You've changed your credit to " + chosenClass);
+                                } else {
+                                    message.reply("You've been added to the attendee list as " + chosenClass);
+                                }
                             });
                         });
                         collector.on('end', endMessage => {
