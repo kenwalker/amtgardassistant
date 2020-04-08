@@ -234,7 +234,12 @@ client.on("message", async message => {
                     //     id: message.author.id
                     // };
                     // participants.push(userRecord);
-                    var newRecord = { event_track: serverID, start_time: Date.now(), participants: participants };
+                    var newRecord = {
+                        event_track: serverID,
+                        start_time: Date.now(),
+                        participants: participants,
+                        date_String: message.createdAt.toDateString()
+                    };
                     dbo.collection("attendance").insertOne(newRecord, function (err, result) {
                         message.reply("Starting to track attendance. Everyone, including you, can now add themselves with\n**!ab attendance addme *optional_class* **");
                     });
@@ -294,6 +299,9 @@ client.on("message", async message => {
                     var alreadyTracked = result.participants.find(function (aParticipant) {
                         return aParticipant.id === message.author.id;
                     });
+                    if (args.length > 1 && args[1].toLowerCase() === "colour") {
+                        args[1] = "color";
+                    }
                     // Was the class provided as an argument?
                     if (args.length > 1) {
                         var chosenClass = allClasses.find(function(item) { return item.toLowerCase() === args[1].toLowerCase() });
@@ -413,6 +421,7 @@ client.on("message", async message => {
                             fields: []
                         };
                         statusEmbed.fields.push({ name: "Tracking time", value: timeConversion(Date.now() - result.start_time), inline: false });
+                        statusEmbed.fields.push({ name: "Tracking date", value: result.date_String, inline: false });
                         statusEmbed.fields.push({ name: "Discord name", value: discord_players, inline: true });
                         statusEmbed.fields.push({ name: "ORK name", value: ork_players, inline: true });
                         statusEmbed.fields.push({ name: "Chosen Class", value: chosen_classes, inline: true });
