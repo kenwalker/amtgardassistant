@@ -207,9 +207,9 @@ client.on("message", async message => {
                         description: "Track attendance for a discord event. Once started players add themselves with the **!ab attendance addme** option",
                         fields: []
                     };
-                    helpEmbed.fields.push({ name: "!ab attendance start", value: "Starts tracking attendance until stop is issued", inline: false });
+                    helpEmbed.fields.push({ name: "!ab attendance start *optional_description*", value: "Starts tracking attendance until stop is issued. You can pass an optional description.", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance addme *optional_class*", value: "Add yourself to the attendee list. You can provide an optional parameter of the class you want", inline: false });
-                    helpEmbed.fields.push({ name: "!ab attendance add", value: "Same as addme, just shorter.", inline: false });
+                    helpEmbed.fields.push({ name: "!ab attendance removeme", value: "Remove yourself from current attendance", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance status", value: "Shows the curret attendance status", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance stop", value: "Stops tracking attendance and shows the participant list", inline: false });
                     if (result !== null) {
@@ -219,7 +219,7 @@ client.on("message", async message => {
                 });
                 break;
             }
-            if (args.length === 1 && args[0] === "start") {
+            if (args.length >= 1 && args[0] === "start") {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result !== null) {
@@ -234,10 +234,16 @@ client.on("message", async message => {
                     //     id: message.author.id
                     // };
                     // participants.push(userRecord);
+
+                    var attendanceDescription = "";
+                    if (args.length >= 2) {
+                        attendanceDescription = args.slice(1).join(" ");
+                    }
                     var newRecord = {
                         event_track: serverID,
                         start_time: Date.now(),
                         participants: participants,
+                        description: attendanceDescription,
                         date_String: message.createdAt.toDateString()
                     };
                     dbo.collection("attendance").insertOne(newRecord, function (err, result) {
@@ -279,13 +285,49 @@ client.on("message", async message => {
                             fields: []
                         };
                         statusEmbed.fields.push({ name: "Tracking time", value: timeConversion(Date.now() - result.start_time), inline: false });
-                        statusEmbed.fields.push({ name: "Discord name", value: discord_players, inline: true });
-                        statusEmbed.fields.push({ name: "ORK name", value: ork_players, inline: true });
-                        statusEmbed.fields.push({ name: "Chosen Class", value: chosen_classes, inline: true });
+                        if (result.participants.length > 0) {
+                            statusEmbed.fields.push({ name: "Discord name", value: discord_players, inline: true });
+                            statusEmbed.fields.push({ name: "ORK name", value: ork_players, inline: true });
+                            statusEmbed.fields.push({ name: "Chosen Class", value: chosen_classes, inline: true });
+                            if (result.description) {
+                                statusEmbed.description = result.description;
+                            }
+                        } else {
+                            statusEmbed.description = "There are no current participants";
+                        }
                         message.reply({ embed: statusEmbed });
                     });
                 });
                 break;
+            }
+            if ((args.length >= 1 && args[0] === "removeme") || (args.length >= 1 && args[0] === "remove")) {
+                dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
+                    if (err) throw err;
+                    if (result === null) {
+                        message.reply("There is no active attendance session in progress").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    }
+                    var alreadyTracked = result.participants.find(function (aParticipant) {
+                        return aParticipant.id === message.author.id;
+                    });
+                    if (!alreadyTracked) {
+                        message.reply("You are not marked as attending the current attendance session").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    };
+                    result.participants = result.participants.filter(function(aParticipant) {
+                        return aParticipant.id !== message.author.id;
+                    });
+                    var myobj = { $set: { participants: result.participants } };
+                    dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                        message.reply("You've been removed from the current attendance ").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                    });
+                });
             }
             if ((args.length >= 1 && args[0] === "addme") || (args.length >= 1 && args[0] === "add")) {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
@@ -420,6 +462,9 @@ client.on("message", async message => {
                             title: "Event attendance",
                             fields: []
                         };
+                        if (result.description) {
+                            statusEmbed.description = result.description;
+                        }
                         statusEmbed.fields.push({ name: "Tracking time", value: timeConversion(Date.now() - result.start_time), inline: false });
                         statusEmbed.fields.push({ name: "Tracking date", value: result.date_String, inline: false });
                         statusEmbed.fields.push({ name: "Discord name", value: discord_players, inline: true });
