@@ -674,26 +674,6 @@ client.on("message", async message => {
             serversEmbed.fields.push({ name: "Messages Processed", value: totalMessages, inline: false });
             message.channel.send({ embed: serversEmbed });
             break;
-        case "generatemydragonmasterentry":
-            var helpEmbed = {
-                color: 3447003,
-                title: "AmtBot - Dragonmaster Spring/Summer 2020 Entry",
-                description: "As Amtgard started to move online during the Covid 19 outbreak I knew that some of my other tools wouldn't be as usefull (Easygard, mORK) so I though about how I could contribute something that could help. Lord Kismet Shenchu",
-                fields: []
-            };
-            helpEmbed.fields.push({ name: "Category", value: "Composition - Media", inline: false });
-            helpEmbed.fields.push({ name: "Discord", value: "I knew nothing about Discord, had no account but realized that this was where a lot of interactions were going to happen so I began looking at it. I made an account and a server.", inline: false });
-            helpEmbed.fields.push({ name: "Bots - Beep Boop", value: "I started looking at automated processes that interact with Discord and then investigated the developer documentation on it", inline: false });
-            helpEmbed.fields.push({ name: "discord.js", value: "discord.js is a JavaScript library that was writted to interact with Discord. I had zero understanding of this library so associate this with learning a new stitch, a new material for your art, etc.", inline: false });
-            helpEmbed.fields.push({ name: "Server for the Bot", value: "A discord bot needs to run somewhere on the internet and be up all the time. In this case, I'm using a runtime called Node JS. In terms of \"quality\" the version of the server running before the update to show this entry has been up for 1 month with no errors or restarts.", inline: false });
-            helpEmbed.fields.push({ name: "Features", value: "AmtBot provides several features from attaendance tracking, player association, spell lookup, player ORK lookup, and a dice roller. The attendance tracker is used quite a bit across servers.", inline: false });
-            helpEmbed.fields.push({ name: "Level of Effort", value: "To get the initial server running was around 70 hours, to date I've likely spend 120 hours adding features.", inline: false });
-            helpEmbed.fields.push({ name: "Adoption", value: "AmtBot is currently installed on 31 servers and 166 players have associated their Discord ID with their ORK ID", inline: false });
-            helpEmbed.fields.push({ name: "Support", value: "AmtBot also has a Facebook page (linked if you press the title above). This page has provided guides, feedback, tutorials and many users have communicated to me via the messaging feature here for support.", inline: false });
-            helpEmbed.footer = { text: "AmtBot was written by lord_kismet_shenchu [Ken Walker], author of Easygard, mORK, jsork & AmtQuest"};
-            helpEmbed.url = 'https://www.facebook.com/discordamtbot/';
-            message.reply({ embed: helpEmbed });
-            break;
         case "help":
         default:
             var helpEmbed = {
