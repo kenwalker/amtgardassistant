@@ -1,4 +1,4 @@
-const Discord = require("discord.js");
+const {Client, MessageAttachment, MessageCollector} = require("discord.js");
 const FuzzySort = require("./fuzzysort.js");
 const jsork = require("./jsork.js");
 const https = require('https');
@@ -31,14 +31,14 @@ MongoClient.connect(url, function (err, db) {
     if (err) throw err;
     dbo = db.db("amtbot");
     dbo.createCollection("ork_ids", function (err, res) {
-        if (err) throw err;
+        // if (err) throw err;
     });
     dbo.createCollection("attendance", function (err, res) {
-        if (err) throw err;
+        // if (err) throw err;
     });
 });
 
-const client = new Discord.Client();
+const client = new Client();
 
 const config = require("./config.json");
 // config.token contains the bot's token.
@@ -117,7 +117,12 @@ client.on("message", async message => {
                         return;
                     }
                     if (players.length > 10) {
-                        var tooManyResults = "Too many results. Try limiting your search to your kingdom and/or park. Look at **!ab myork help** for player filter suggestions";
+                        var tooManyResults;
+                        if (args[args.length-1].indexOf("-") !== -1) {
+                            tooManyResults = "Too many results. Player names with '-' can be very difficult to search for. Consider having your Chancellor rename your id. Try limiting your search to your kingdom and/or park. Look at **!ab myork help** for player filter suggestions";
+                        } else {
+                            tooManyResults = "Too many results. Try limiting your search to your kingdom and/or park. Look at **!ab myork help** for player filter suggestions";
+                        }
                         message.reply(tooManyResults).then(function (reply) {
                             if (!reply.deleted) { reply.delete({ timeout: 30000 }); }
                         });
@@ -139,7 +144,7 @@ client.on("message", async message => {
                             chooseFrom += "\n" + (index + 1) + ") *" + aResult.UserName + "* (" + aResult.Persona + ")" + " - " + aResult.KingdomName + " - " + aResult.ParkName;
                         });
                         message.reply(chooseFrom).then(function (replyMessage) {
-                            const collector = new Discord.MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
+                            const collector = new MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
                             collector.on('collect', message => {
                                 var userChoice = 0;
                                 if (/^\d+$/.test(message.content)) {
@@ -210,7 +215,8 @@ client.on("message", async message => {
                     helpEmbed.fields.push({ name: "!ab attendance start *optional_description*", value: "Starts tracking attendance until stop is issued. You can pass an optional description.", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance addme *optional_class*", value: "Add yourself to the attendee list. You can provide an optional parameter of the class you want", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance removeme", value: "Remove yourself from current attendance", inline: false });
-                    helpEmbed.fields.push({ name: "!ab attendance status", value: "Shows the curret attendance status", inline: false });
+                    helpEmbed.fields.push({ name: "!ab attendance description *new description*", value: "Change the description of the attendance", inline: false });
+                    helpEmbed.fields.push({ name: "!ab attendance status", value: "Shows the current attendance status", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance stop", value: "Stops tracking attendance and shows the participant list", inline: false });
                     if (result !== null) {
                         helpEmbed.fields.push({ name: "CURRENTLY TRACKING", value: "There is an ACTIVE tracking session currently!", inline: false });
@@ -218,6 +224,34 @@ client.on("message", async message => {
                     message.reply({ embed: helpEmbed });
                 });
                 break;
+            }
+            if (args.length >= 1 && args[0] === "description") {
+                dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
+                    if (err) throw err;
+                    if (result === null) {
+                        message.reply("There's no ACTIVE tracking session to change the description for").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    }
+                    if (args.length < 2) {
+                        message.reply("Please provide a new description in the request").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    }
+                    var attendanceDescription = "";
+                    if (args.length >= 2) {
+                        attendanceDescription = args.slice(1).join(" ");
+                    }
+                    result.description = attendanceDescription;
+                    var myobj = { $set: { description: result.description } };
+                    dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                        message.reply("The event description has been updated").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                    });    
+                });
             }
             if (args.length >= 1 && args[0] === "start") {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
@@ -273,7 +307,11 @@ client.on("message", async message => {
                             });
                             discord_players.push(aParticipant.username);
                             if (orkInfo) {
-                                ork_players.push(orkInfo.ork_id);
+                                if (!aParticipant.kingdom) {
+                                    ork_players.push(orkInfo.ork_id);
+                                } else {
+                                    ork_players.push(aParticipant.kingdom + ":" + aParticipant.park + " " +orkInfo.ork_id);
+                                }
                             } else {
                                 ork_players.push(" -- ");
                             }
@@ -344,82 +382,111 @@ client.on("message", async message => {
                     if (args.length > 1 && args[1].toLowerCase() === "colour") {
                         args[1] = "color";
                     }
-                    // Was the class provided as an argument?
-                    if (args.length > 1) {
-                        var chosenClass = allClasses.find(function (item) { return item.toLowerCase() === args[1].toLowerCase() });
-                        if (chosenClass) {
-                            if (alreadyTracked) {
-                                alreadyTracked.chosen_class = chosenClass
-                            } else {
-                                var userRecord = {
-                                    username: message.author.username,
-                                    id: message.author.id,
-                                    chosen_class: chosenClass
-                                };
-                                result.participants.push(userRecord);
-                            }
-                            var myobj = { $set: { participants: result.participants } };
-                            dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                    var search_filter = { discord_id: message.author.id };
+                    var additionalPlayerInfo = {};
+
+                    var respondWithMessage = function() {
+                        // Was the class provided as an argument?
+                        if (args.length > 1) {
+                            var chosenClass = allClasses.find(function (item) { return item.toLowerCase() === args[1].toLowerCase() });
+                            if (chosenClass) {
                                 if (alreadyTracked) {
-                                    message.reply("You've changed your credit to " + chosenClass);
+                                    alreadyTracked.chosen_class = chosenClass;
                                 } else {
-                                    message.reply("You've been added to the attendee list as " + chosenClass);
+                                    var userRecord = {
+                                        username: message.author.username,
+                                        id: message.author.id,
+                                        chosen_class: chosenClass,
+                                        kingdom: additionalPlayerInfo.kingdom,
+                                        park: additionalPlayerInfo.park
+                                    };
+                                    result.participants.push(userRecord);
                                 }
-                            });
-                            return;
-                        }
-                    }
-                    var chooseFrom = "\nChoose your class, 0 to cancel: \n";
-                    if (alreadyTracked) {
-                        chooseFrom = "\nYou are already attending as " + alreadyTracked.chosen_class + ". You can choose a new class or 0 to cancel:\n";
-                    }
-                    allClasses.forEach(function (aClass, index) {
-                        chooseFrom += (index + 1) + ") *" + aClass + "*";
-                        if (false && (index + 1) % 3 === 0 && index < allClasses.length) {
-                            chooseFrom += "\n";
-                        } else {
-                            chooseFrom += "  ";
-                        }
-                    });
-                    message.reply(chooseFrom).then(function (replyMessage) {
-                        const collector = new Discord.MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
-                        collector.on('collect', message => {
-                            var userChoice = 0;
-                            if (/^\d+$/.test(message.content)) {
-                                userChoice = Number(message.content);
-                            }
-                            if (userChoice > allClasses.length || userChoice === 0) {
-                                if (!replyMessage.deleted) { replyMessage.delete(); }
+                                var myobj = { $set: { participants: result.participants } };
+                                dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                                    if (alreadyTracked) {
+                                        message.reply("You've changed your credit to " + chosenClass);
+                                    } else {
+                                        message.reply("You've been added to the attendee list as " + chosenClass);
+                                    }
+                                });
                                 return;
                             }
-                            if (!replyMessage.deleted) {
-                                replyMessage.delete();
-                            }
-                            var chosenClass = allClasses[userChoice - 1];
-                            if (alreadyTracked) {
-                                alreadyTracked.chosen_class = chosenClass
+                        }
+                        var chooseFrom = "\nChoose your class, 0 to cancel: \n";
+                        if (alreadyTracked) {
+                            chooseFrom = "\nYou are already attending as " + alreadyTracked.chosen_class + ". You can choose a new class or 0 to cancel:\n";
+                        }
+                        allClasses.forEach(function (aClass, index) {
+                            chooseFrom += (index + 1) + ") *" + aClass + "*";
+                            if (false && (index + 1) % 3 === 0 && index < allClasses.length) {
+                                chooseFrom += "\n";
                             } else {
-                                var userRecord = {
-                                    username: message.author.username,
-                                    id: message.author.id,
-                                    chosen_class: chosenClass
-                                };
-                                result.participants.push(userRecord);
+                                chooseFrom += "  ";
                             }
-                            var myobj = { $set: { participants: result.participants } };
-                            dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                        });
+                        message.reply(chooseFrom).then(function (replyMessage) {
+                            const collector = new MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
+                            collector.on('collect', message => {
+                                var userChoice = 0;
+                                if (/^\d+$/.test(message.content)) {
+                                    userChoice = Number(message.content);
+                                }
+                                if (userChoice > allClasses.length || userChoice === 0) {
+                                    if (!replyMessage.deleted) { replyMessage.delete(); }
+                                    return;
+                                }
+                                if (!replyMessage.deleted) {
+                                    replyMessage.delete();
+                                }
+                                var chosenClass = allClasses[userChoice - 1];
                                 if (alreadyTracked) {
-                                    message.reply("You've changed your credit to " + chosenClass);
+                                    alreadyTracked.chosen_class = chosenClass
                                 } else {
-                                    message.reply("You've been added to the attendee list as " + chosenClass);
+                                    var userRecord = {
+                                        username: message.author.username,
+                                        id: message.author.id,
+                                        chosen_class: chosenClass,
+                                        kingdom: additionalPlayerInfo.kingdom,
+                                        park: additionalPlayerInfo.park,
+                                        fullKingdom: additionalPlayerInfo.fullKingdom,
+                                        fullPark: additionalPlayerInfo.fullPark
+                                    };
+                                    result.participants.push(userRecord);
+                                }
+                                var myobj = { $set: { participants: result.participants } };
+                                dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                                    if (alreadyTracked) {
+                                        message.reply("You've changed your credit to " + chosenClass);
+                                    } else {
+                                        message.reply("You've been added to the attendee list as " + chosenClass);
+                                    }
+                                });
+                            });
+                            collector.on('end', endMessage => {
+                                if (!replyMessage.deleted) {
+                                    replyMessage.delete();
                                 }
                             });
                         });
-                        collector.on('end', endMessage => {
-                            if (!replyMessage.deleted) {
-                                replyMessage.delete();
-                            }
-                        });
+                    };
+
+                    dbo.collection("ork_ids").find(search_filter).toArray(function (err, orkResults) {
+                        if (orkResults.length > 0) {
+                            jsork.searchservice.searchUsername(orkResults[0].ork_id).then(function (players) {
+                                jsork.kingdom.getInfo(players[0].KingdomId).then(function(results) {
+                                    additionalPlayerInfo.kingdom = results.Abbreviation;
+                                    additionalPlayerInfo.fullKingdom = results.KingdomName;
+                                    jsork.park.getInfo(players[0].ParkId).then(function(results) {
+                                        additionalPlayerInfo.park = results.Abbreviation;
+                                        additionalPlayerInfo.fullPark = results.ParkName;
+                                        respondWithMessage();
+                                    });
+                                });
+                            });
+                        } else {
+                            respondWithMessage();
+                        }
                     });
                 });
                 break;
@@ -441,6 +508,15 @@ client.on("message", async message => {
                     }
                     var ids_to_find = result.participants.map(function (aUser) { return aUser.id; });
                     var search_filter = { discord_id: { $in: ids_to_find } };
+                    var textResults = "";
+                    textResults += "Discord name\tORK name\tKingdom\tPark\tChosen class\t";
+                    textResults += result.description || "No event description";
+                    textResults += "\t";
+                    textResults += "Tracking time " + timeConversion(Date.now() - result.start_time);
+                    textResults += "\t";
+                    textResults += "Tracking date " + result.date_String;
+                    textResults += "\r\n";
+
                     dbo.collection("ork_ids").find(search_filter).toArray(function (err, orkResults) {
                         var discord_players = [];
                         var ork_players = [];
@@ -450,12 +526,25 @@ client.on("message", async message => {
                                 return orkUser.discord_id === aParticipant.id;
                             });
                             discord_players.push(aParticipant.username);
+                            textResults += aParticipant.username + "\t";
                             if (orkInfo) {
-                                ork_players.push(orkInfo.ork_id);
+                                if (!aParticipant.kingdom) {
+                                    ork_players.push(orkInfo.ork_id);
+                                    textResults += orkInfo.ork_id + "\t\t\t";
+                                } else {
+                                    ork_players.push(aParticipant.kingdom + ":" + aParticipant.park + " " + orkInfo.ork_id);
+                                    
+                                    textResults += aParticipant.kingdom + ":" + aParticipant.park + " " +orkInfo.ork_id + "\t";
+                                    textResults += aParticipant.fullKingdom + "\t";
+                                    textResults += aParticipant.fullPark + "\t";
+                                }
                             } else {
                                 ork_players.push(" -- ");
+                                textResults += " -- \t -- \t -- \t";
                             }
                             chosen_classes.push(aParticipant.chosen_class || " -- ");
+                            textResults += aParticipant.chosen_class || " -- ";
+                            textResults += "\t\t\t\r\n";
                         });
                         var statusEmbed = {
                             color: 3447003,
@@ -470,9 +559,14 @@ client.on("message", async message => {
                         statusEmbed.fields.push({ name: "Discord name", value: discord_players, inline: true });
                         statusEmbed.fields.push({ name: "ORK name", value: ork_players, inline: true });
                         statusEmbed.fields.push({ name: "Chosen Class", value: chosen_classes, inline: true });
-                        message.reply({ embed: statusEmbed });
-                        dbo.collection("attendance").deleteOne({ event_track: serverID }, function (err, result) {
+                        message.reply({ embed: statusEmbed }).then(function(reply) {
+                            dbo.collection("attendance").deleteOne({ event_track: serverID }, function (err, result) {
+                            });
+                        }).catch(function(err) {
+                            // don't delete the attendance if something went wrong posting the results
                         });
+                        const attachment = new MessageAttachment(Buffer.from(textResults, 'utf-8'), 'attendance_'+result.date_String+'.csv');
+                        message.reply(`the attendance is in this attachment`, attachment);
                     });
                 });
                 break;
@@ -598,7 +692,12 @@ client.on("message", async message => {
                     return;
                 }
                 if (players.length > 10) {
-                    var tooManyResults = "Too many results. Try limiting your search to your kingdom and/or park. Look at **!ab myork help** for player filter suggestions";
+                    var tooManyResults;
+                    if (args[args.length-1].indexOf("-") !== -1) {
+                        tooManyResults = "Too many results. Player names with '-' can be very difficult to search for. Consider having your Chancellor rename your id. Try limiting your search to your kingdom and/or park. Look at **!ab player** for player filter suggestions";
+                    } else {
+                        tooManyResults = "Too many results. Try limiting your search to your kingdom and/or park. Look at **!ab player** for player filter suggestions";
+                    }
                     message.reply(tooManyResults).then(function (reply) {
                         if (!reply.deleted) { reply.delete({ timeout: 15000 }); }
                     });
@@ -630,7 +729,7 @@ client.on("message", async message => {
                         chooseFrom += "\n" + (index + 1) + ") *" + aResult.UserName + "* (" + aResult.Persona + ")" + " - " + aResult.KingdomName + " - " + aResult.ParkName;
                     });
                     message.reply(chooseFrom).then(function (replyMessage) {
-                        const collector = new Discord.MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
+                        const collector = new MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
                         collector.on('collect', message => {
                             var userChoice = 0;
                             if (/^\d+$/.test(message.content)) {
@@ -659,20 +758,26 @@ client.on("message", async message => {
         case "servers":
             var allServers = [];
             var allRegions = [];
-            client.guilds.cache.forEach(function (aGuild) {
-                allServers.push(aGuild.name);
-                allRegions.push(aGuild.region || " ");
+            dbo.collection("ork_ids").count().then(function(countORKid) {
+                dbo.collection("attendance").count().then(function(countAttendances) {
+                    client.guilds.cache.forEach(function (aGuild) {
+                        allServers.push(aGuild.name);
+                        allRegions.push(aGuild.region || " ");
+                    });
+                    var serversEmbed = {
+                        color: 3447003,
+                        description: "AmtBot is active on these " + allServers.length + " servers",
+                        fields: []
+                    };
+                    serversEmbed.fields.push({ name: "Server", value: allServers, inline: true });
+                    serversEmbed.fields.push({ name: "Region", value: allRegions, inline: true });
+                    serversEmbed.fields.push({ name: "Last restart", value: timeConversion(Date.now() - launchTime), inline: false });
+                    serversEmbed.fields.push({ name: "Messages Processed", value: totalMessages, inline: false });
+                    serversEmbed.fields.push({ name: "ORK IDs", value: countORKid, inline: false });
+                    serversEmbed.fields.push({ name: "Live Attendances", value: countAttendances, inline: false });
+                    message.channel.send({ embed: serversEmbed });
+                });
             });
-            var serversEmbed = {
-                color: 3447003,
-                description: "AmtBot is active on these " + allServers.length + " servers",
-                fields: []
-            };
-            serversEmbed.fields.push({ name: "Server", value: allServers, inline: true });
-            serversEmbed.fields.push({ name: "Region", value: allRegions, inline: true });
-            serversEmbed.fields.push({ name: "Last restart", value: timeConversion(Date.now() - launchTime), inline: false });
-            serversEmbed.fields.push({ name: "Messages Processed", value: totalMessages, inline: false });
-            message.channel.send({ embed: serversEmbed });
             break;
         case "help":
         default:

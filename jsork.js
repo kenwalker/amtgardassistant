@@ -182,11 +182,12 @@ const request = require('request');
                 {},
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
+                    var allKingdoms = [];
                     if (jsonData.Status.Status === 0) {
-                        var kingdomArray = $.map(jsonData.Kingdoms, function (value, index) {
-                            return value;
+                        Object.keys(jsonData.Kingdoms).forEach(function(aKey) {
+                            allKingdoms.push(jsonData.Kingdoms[aKey]);
                         });
-                        resolve(kingdomArray);
+                        resolve(allKingdoms);
                     } else {
                         reject(Error('Call failed ' + JSON.stringify(jsonData)));
                     }
@@ -195,6 +196,24 @@ const request = require('request');
         return promise;
     };
 
+    jsork.kingdom.getInfo = function (kingdomId) {
+        var promise = new Promise(function (resolve, reject) {
+            var url = ork + '?request';
+            url += '&call=Kingdom/GetKingdomDetails';
+            url += '&request[KingdomId]=' + kingdomId;
+            request(url,
+                function (error, result, data) {
+                    var jsonData = JSON.parse(data);
+                    if (jsonData.Status.Status === 0) {
+                        resolve(jsonData.KingdomInfo);
+                    } else {
+                        resolve([]);
+                    }
+                });
+        });
+        return promise;
+    };
+    
     jsork.kingdom.getAllParks = function () {
         var kingdoms = jsork.kingdom.getKingdoms();
         kingdoms.then(function (kingdomsArray) {
@@ -269,25 +288,7 @@ const request = require('request');
         return promise;
     };
 
-    jsork.kingdom.getInfo = function (kingdomId) {
-        var promise = new Promise(function (resolve, reject) {
-            $.getJSON(ork + '?request=',
-                {
-                    call: 'Kingdom/GetKingdomDetails',
-                    request: { KingdomId: kingdomId }
-                },
-                function (data) {
-                    if (data.Status.Status === 0) {
-                        resolve(data.KingdomInfo);
-                    } else {
-                        resolve([]);
-                    }
-                }).fail(function (error, textStatus) {
-                    reject(textStatus);
-                });
-        });
-        return promise;
-    };
+
 
     jsork.kingdom.getPrincipalities = function (kingdomId, callback) {
         var promise = new Promise(function (resolve) {
@@ -518,19 +519,17 @@ const request = require('request');
 
     jsork.park.getInfo = function (parkID) {
         var promise = new Promise(function (resolve, reject) {
-            $.getJSON(ork + '?request=',
-                {
-                    call: 'Park/GetParkDetails',
-                    request: { ParkId: parkID }
-                },
-                function (data) {
-                    if (data.Status.Status === 0) {
-                        resolve(data);
+            var url = ork + '?request';
+            url += '&call=Park/GetParkDetails';
+            url += '&request[ParkId]=' + parkID;
+            request(url,
+                function (error, result, data) {
+                    var jsonData = JSON.parse(data);
+                    if (jsonData.Status.Status === 0) {
+                        resolve(jsonData);
                     } else {
                         resolve([]);
                     }
-                }).fail(function (error, textStatus) {
-                    reject(textStatus);
                 });
         });
         return promise;
@@ -1225,7 +1224,8 @@ const request = require('request');
                     } else {
                         reject(Error('Call failed ' + JSON.stringify(jsonData)));
                     }
-                });
+                }
+            );
         });
         return promise;
     };
