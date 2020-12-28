@@ -398,7 +398,9 @@ client.on("message", async message => {
                                         id: message.author.id,
                                         chosen_class: chosenClass,
                                         kingdom: additionalPlayerInfo.kingdom,
-                                        park: additionalPlayerInfo.park
+                                        park: additionalPlayerInfo.park,
+                                        fullKingdom: additionalPlayerInfo.fullKingdom,
+                                        fullPark: additionalPlayerInfo.fullPark
                                     };
                                     result.participants.push(userRecord);
                                 }
