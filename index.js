@@ -475,11 +475,11 @@ client.on("message", async message => {
 
                     dbo.collection("ork_ids").find(search_filter).toArray(function (err, orkResults) {
                         if (orkResults.length > 0) {
-                            jsork.searchservice.searchUsername(orkResults[0].ork_id).then(function (players) {
-                                jsork.kingdom.getInfo(players[0].KingdomId).then(function(results) {
+                            jsork.player.getInfo(orkResults[0].ork_mundane_id).then(function(playerInfo) {
+                                jsork.kingdom.getInfo(playerInfo.KingdomId).then(function(results) {
                                     additionalPlayerInfo.kingdom = results.Abbreviation;
                                     additionalPlayerInfo.fullKingdom = results.KingdomName;
-                                    jsork.park.getInfo(players[0].ParkId).then(function(results) {
+                                    jsork.park.getInfo(playerInfo.ParkId).then(function(results) {
                                         additionalPlayerInfo.park = results.Abbreviation;
                                         additionalPlayerInfo.fullPark = results.ParkName;
                                         respondWithMessage();

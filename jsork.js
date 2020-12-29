@@ -658,24 +658,17 @@ const request = require('request');
 
     jsork.player.getInfo = function (mundaneID) {
         var promise = new Promise(function (resolve, reject) {
-            var request =
-            {
-                Token: jsork.TOKEN,
-                MundaneId: mundaneID
-            };
-            $.getJSON(ork + '?request=',
-                {
-                    call: 'Player/GetPlayer',
-                    request: request
-                },
-                function (data) {
-                    if (data.Status.Status === 0 || data.Status === true) {
-                        resolve(data.Player);
+            var url = ork + '?request';
+            url += '&call=Player/GetPlayer';
+            url += '&request[MundaneId]=' + mundaneID;
+            request(url,
+                function (error, result, data) {
+                    var jsonData = JSON.parse(data);
+                    if (jsonData.Status.Status === 0) {
+                        resolve(jsonData.Player);
                     } else {
-                        reject('Error retrieving player');
+                        resolve([]);
                     }
-                }).fail(function (error, textStatus) {
-                    reject(textStatus);
                 });
         });
         return promise;
@@ -1216,6 +1209,27 @@ const request = require('request');
             url += '&search=' + searchTerm;
             url += '&limit=20';
             url += 'Token=' + jsork.TOKEN;
+            request(url,
+                function (error, result, data) {
+                    var jsonData = JSON.parse(data);
+                    if (jsonData.Status.Status === 0 || jsonData.Status === true) {
+                        resolve(jsonData.Result);
+                    } else {
+                        reject(Error('Call failed ' + JSON.stringify(jsonData)));
+                    }
+                }
+            );
+        });
+        return promise;
+    };
+
+    jsork.searchservice.searchUsernameALL = function (searchTerm) {
+        var promise = new Promise(function (resolve, reject) {
+            var url = ork + '?';
+            url += 'call=SearchService/Player';
+            url += '&type=USER';
+            url += '&search=' + searchTerm;
+            url += '&limit=2000';
             request(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
