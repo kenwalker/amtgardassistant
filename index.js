@@ -379,8 +379,10 @@ client.on("message", async message => {
                     var alreadyTracked = result.participants.find(function (aParticipant) {
                         return aParticipant.id === message.author.id;
                     });
+                    var wrongColor = false;
                     if (args.length > 1 && args[1].toLowerCase() === "colour") {
                         args[1] = "color";
+                        wrongColor = true;
                     }
                     var search_filter = { discord_id: message.author.id };
                     var additionalPlayerInfo = {};
@@ -407,9 +409,9 @@ client.on("message", async message => {
                                 var myobj = { $set: { participants: result.participants } };
                                 dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
                                     if (alreadyTracked) {
-                                        message.reply("You've changed your credit to " + chosenClass);
+                                        message.reply("You've changed your credit to " + chosenClass + (wrongColor ? ", eh" : ""));
                                     } else {
-                                        message.reply("You've been added to the attendee list as " + chosenClass);
+                                        message.reply("You've been added to the attendee list as " + chosenClass + (wrongColor ? ", eh" : ""));
                                     }
                                 });
                                 return;
