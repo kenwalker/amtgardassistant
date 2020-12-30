@@ -7,6 +7,10 @@ var url = "mongodb://localhost:27017/";
 var dbo = null;
 var launchTime = Date.now();
 var totalMessages = 0;
+var totalAttendances = 0;
+var largestAttendance = 0;
+var largestAttendanceServer = "(No attendances yet)";
+var largestAttendanceEventname = "(No attendances yet)";
 var allClasses = [
     'Anti-Paladin',
     'Archer',
@@ -283,6 +287,7 @@ client.on("message", async message => {
                     dbo.collection("attendance").insertOne(newRecord, function (err, result) {
                         message.reply("Starting to track attendance. Everyone, including you, can now add themselves with\n**!ab attendance addme *optional_class* **");
                     });
+                    totalAttendances++;
                 });
                 break;
             }
@@ -509,6 +514,11 @@ client.on("message", async message => {
                         dbo.collection("attendance").deleteOne({ event_track: serverID }, function (err, result) {
                         });
                         return;
+                    }
+                    if (result.participants.length > largestAttendance) {
+                        largestAttendance = result.participants.length;
+                        largestAttendanceServer = message.guild.name;
+                        largestAttendanceEventname = result.description || "Event had no description";
                     }
                     var ids_to_find = result.participants.map(function (aUser) { return aUser.id; });
                     var search_filter = { discord_id: { $in: ids_to_find } };
@@ -763,7 +773,7 @@ client.on("message", async message => {
             var allServers = [];
             var allRegions = [];
             dbo.collection("ork_ids").count().then(function(countORKid) {
-                dbo.collection("attendance").count().then(function(countAttendances) {
+                dbo.collection("attendance").count().then(function(liveAttendances) {
                     client.guilds.cache.forEach(function (aGuild) {
                         allServers.push(aGuild.name);
                         allRegions.push(aGuild.region || " ");
@@ -778,7 +788,11 @@ client.on("message", async message => {
                     serversEmbed.fields.push({ name: "Last restart", value: timeConversion(Date.now() - launchTime), inline: false });
                     serversEmbed.fields.push({ name: "Messages Processed", value: totalMessages, inline: false });
                     serversEmbed.fields.push({ name: "ORK IDs", value: countORKid, inline: false });
-                    serversEmbed.fields.push({ name: "Live Attendances", value: countAttendances, inline: false });
+                    serversEmbed.fields.push({ name: "Number of Attendance tracking sessions", value: totalAttendances.toString(), inline: false });
+                    serversEmbed.fields.push({ name: "Largest Attendance", value: largestAttendance.toString(), inline: true });
+                    serversEmbed.fields.push({ name: "Server", value: largestAttendanceServer.toString(), inline: true });
+                    serversEmbed.fields.push({ name: "Event", value: largestAttendanceEventname.toString(), inline: true });
+                    serversEmbed.fields.push({ name: "Currently Live Attendance Sessions", value: liveAttendances.toString(), inline: false });
                     message.channel.send({ embed: serversEmbed });
                 });
             });
