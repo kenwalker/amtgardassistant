@@ -40,6 +40,10 @@ MongoClient.connect(url, function (err, db) {
     dbo.createCollection("attendance", function (err, res) {
         // if (err) throw err;
     });
+    // dbo.collection("bardic").drop();
+    dbo.createCollection("bardic", function (err, res) {
+        // if (err) throw err;
+    });
 });
 
 const client = new Client();
@@ -204,6 +208,216 @@ client.on("message", async message => {
             message.reply({ embed: helpEmbed }).then(function (reply) {
                 if (!reply.deleted) { reply.delete({ timeout: 30000 }); }
             });
+            break;
+        case "song":
+            var serverID = message.guild.id;
+            var helpMessage = function() {
+                dbo.collection("bardic").findOne({ bardic_track: serverID }, function (err, result) {
+                    if (err) throw err;
+                    var helpEmbed = {
+                        color: 3447003,
+                        title: "!ab song",
+                        description: "Setup a bardic song list. Players can add or request songs with the **!ab song add** or **!ab song request** options",
+                        fields: []
+                    };
+                    helpEmbed.fields.push({ name: "!ab song add *song name*", value: "Add a song you're going to perform to the Bardic list. You need to provide the name of the song you're performing", inline: false });
+                    helpEmbed.fields.push({ name: "!ab song request *song name*", value: "Add a song you'd like someone to perform in the Bardic. You need to provide the name of the song", inline: false });
+                    helpEmbed.fields.push({ name: "!ab song list", value: "Show the current Bardic song list", inline: false });
+                    helpEmbed.fields.push({ name: "!ab song done *song number*", value: "Removed a song from the list", inline: false });
+                    helpEmbed.fields.push({ name: "!ab song clear", value: "Clear *ALL* the songs from the Bardic list", inline: false });
+                    helpEmbed.fields.push({ name: "!ab song help", value: "Show this help", inline: false });
+                    if (result !== null && result.songs.length > 0) {
+                        helpEmbed.fields.push({ name: "Active Bardic!", value: "There is an ACTIVE bardic session currently, use *!ab song list* to see the list", inline: false });
+                    }
+                    message.reply({ embed: helpEmbed });
+                });
+            }
+            if (args.length === 0) {
+                helpMessage();
+                break;
+            }
+            if (args.length === 1 && args[0] === "list") {
+                dbo.collection("bardic").findOne({ bardic_track: serverID }, function (err, result) {
+                    if (err) throw err;
+                    if (result === null || result.songs.length === 0) {
+                        message.reply("There is no bardic in progress, try adding some songs").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    }
+                    var song_numbers = [];
+                    var song_titles = [];
+                    var song_users = [];
+                    result.songs.forEach(function(aSong) {
+                        song_numbers.push(aSong.number);
+                        song_titles.push(aSong.title);
+                        if (aSong.requested) {
+                            song_users.push("Requested: " + aSong.username);
+                        } else {
+                            song_users.push("Performer: " + aSong.username);
+                        }
+                    });
+
+                    var statusEmbed = {
+                        color: 3447003,
+                        title: "Bardic Song List",
+                        fields: []
+                    };
+                    statusEmbed.fields.push({ name: "Song Number", value: song_numbers, inline: true });
+                    statusEmbed.fields.push({ name: "Title", value: song_titles, inline: true });
+                    statusEmbed.fields.push({ name: "Request or Performer", value: song_users, inline: true });
+                    message.reply({ embed: statusEmbed });
+                });
+                break;
+            }
+            if (args.length >= 1 && args[0] === "add") {
+                if (args.length < 2) {
+                    message.reply("Please provide a song title to add").then(function (reply) {
+                        if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                    });
+                    return;
+                }
+                dbo.collection("bardic").findOne({ bardic_track: serverID }, function (err, result) {
+                    var respondWithMessage = function(theResults, songNumber) {
+                        var songRecord = {
+                            username: message.member.displayName,
+                            number: songNumber,
+                            requested: false,
+                            title: args.slice(1).join(" ")
+                        };
+                        theResults.songs.push(songRecord);
+                        var myobj = { $set: { songs: theResults.songs } };
+                        dbo.collection("bardic").updateOne({ bardic_track: serverID }, myobj, function (err, res) {
+                            message.reply("Added song number " + songNumber + " to the Bardic list").then(function (reply) {
+                                if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                            });
+                        });
+                    }
+                    if (result === null) {
+                        var newRecord = {
+                            bardic_track: serverID,
+                            songs: []
+                        };
+                        dbo.collection("bardic").insertOne(newRecord, function (err, insertResult) {
+                            respondWithMessage(newRecord, 1);
+                        });
+                    } else {
+                        var nextSong = result.songs.length === 0 ? 1 : ((result.songs[(result.songs.length - 1)].number + 1));
+                        respondWithMessage(result, nextSong);
+                    }
+                });
+                break;
+            }
+            if (args.length >= 1 && args[0] === "request") {
+                if (args.length < 2) {
+                    message.reply("Please provide a song title in your request").then(function (reply) {
+                        if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                    });
+                    return;
+                }
+                dbo.collection("bardic").findOne({ bardic_track: serverID }, function (err, result) {
+                    // var search_filter = { discord_id: message.author.id };
+                    var respondWithMessage = function(theResults, songNumber) {
+                        var songRecord = {
+                            username: message.member.displayName,
+                            number: songNumber,
+                            requested: true,
+                            title: args.slice(1).join(" ")
+                        };
+                        theResults.songs.push(songRecord);
+                        var myobj = { $set: { songs: theResults.songs } };
+                        dbo.collection("bardic").updateOne({ bardic_track: serverID }, myobj, function (err, res) {
+                            message.reply("Added song number " + songNumber + " to the Bardic list").then(function (reply) {
+                                if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                            });
+                        });
+                    }
+                    if (result === null) {
+                        var newRecord = {
+                            bardic_track: serverID,
+                            songs: []
+                        };
+                        dbo.collection("bardic").insertOne(newRecord, function (err, insertResult) {
+                            respondWithMessage(newRecord, 1);
+                        });
+                    } else {
+                        var nextSong = result.songs.length === 0 ? 1 : ((result.songs[(result.songs.length - 1)].number + 1));
+                        respondWithMessage(result, nextSong);
+                    }
+                });
+                break;
+            }
+            if ((args.length >= 1 && args[0] === "done") || (args.length >= 1 && args[0] === "remove")) {
+                dbo.collection("bardic").findOne({ bardic_track: serverID }, function (err, result) {
+                    if (result === null || result.songs.length === 0) {
+                        message.reply("There's no Bardic in progress").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    }
+                    if (args.length < 2 || isNaN(parseInt(args[1]))) {
+                        message.reply("Please provide a song number to remove in your request").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    }
+                    var entry = result.songs.find(function (aSong) {
+                        return aSong.number === parseInt(args[1]);
+                    });
+                    if (!entry) {
+                        message.reply("There's no song number " + parseInt(args[1])).then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    }
+                    result.songs = result.songs.filter(function (aSong) {
+                        return aSong.number !== parseInt(args[1]);
+                    });
+                    result.songs.forEach(function(aSong, index) {
+                        aSong.number = index + 1;
+                    });
+                    var myobj = { $set: { songs: result.songs } };
+                    dbo.collection("bardic").updateOne({ bardic_track: serverID }, myobj, function (err, res) {
+                        message.reply("The song has been removed").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                    });
+                });
+                break;
+            }
+            if ((args.length >= 1 && args[0] === "clear")) {
+                dbo.collection("bardic").findOne({ bardic_track: serverID }, function (err, result) {
+                    if (result === null || result.songs.length === 0) {
+                        message.reply("There's no Bardic in progress").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    }
+                    var prompt = "\nReally delete all songs? Y to confirm";
+                    message.reply(prompt).then(function (replyMessage) {
+                        const collector = new MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
+                        collector.on('collect', message => {
+                            if (!replyMessage.deleted) { replyMessage.delete(); }
+                            if (message.content.toLowerCase() === 'y') {
+                                result.songs = [];
+                                var myobj = { $set: { songs: result.songs } };
+                                dbo.collection("bardic").updateOne({ bardic_track: serverID }, myobj, function (err, res) {
+                                    message.reply("All the songs have been removed").then(function (reply) {
+                                        if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                                    });
+                                });
+                            } else {
+                                message.reply("Bardic list not cleared").then(function (reply) {
+                                    if (!reply.deleted) { reply.delete({ timeout: 2000 }); }
+                                });
+                            }
+                            collector.stop();
+                        });
+                    });
+                });
+                break;
+            }
+            helpMessage();
             break;
         case "attendance":
             var serverID = message.guild.id;
@@ -810,6 +1024,7 @@ client.on("message", async message => {
             helpEmbed.fields.push({ name: "!ab spell", value: "Look up an Amtgard spell and display the information about it", inline: false });
             helpEmbed.fields.push({ name: "!ab attendance", value: "Start tracking attendance for an online event", inline: false });
             helpEmbed.fields.push({ name: "!ab roll", value: "Generate a random integer between 1 and the provided integer parameter", inline: false });
+            helpEmbed.fields.push({ name: "!ab song", value: "Bardic playlist of songs and requests for songs", inline: false });
             helpEmbed.fields.push({ name: "!ab help", value: "Show this help information", inline: false });
             helpEmbed.footer = { text: "Written by Kismet (Easygard, mORK, jsork, AmtQuest, AmtBot)" };
             helpEmbed.url = 'https://www.facebook.com/discordamtbot/';
