@@ -223,7 +223,7 @@ client.on("message", async message => {
                     helpEmbed.fields.push({ name: "!ab song add *song name*", value: "Add a song you're going to perform to the Bardic list. You need to provide the name of the song you're performing", inline: false });
                     helpEmbed.fields.push({ name: "!ab song request *song name*", value: "Add a song you'd like someone to perform in the Bardic. You need to provide the name of the song", inline: false });
                     helpEmbed.fields.push({ name: "!ab song list", value: "Show the current Bardic song list", inline: false });
-                    helpEmbed.fields.push({ name: "!ab song done *song number*", value: "Removed a song from the list", inline: false });
+                    helpEmbed.fields.push({ name: "!ab song done|remove *song number*", value: "Remove a song from the list", inline: false });
                     helpEmbed.fields.push({ name: "!ab song clear", value: "Clear *ALL* the songs from the Bardic list", inline: false });
                     helpEmbed.fields.push({ name: "!ab song help", value: "Show this help", inline: false });
                     if (result !== null && result.songs.length > 0) {
