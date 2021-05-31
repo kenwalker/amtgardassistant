@@ -992,6 +992,10 @@ client.on("message", async message => {
                 dbo.collection("attendance").count().then(function(liveAttendances) {
                     console.log("3");
                     var aa = 1;
+                    var totalServers = 0;
+                    client.guilds.cache.forEach(function (aGuild) {
+                        totalServers++;
+                    })
                     client.guilds.cache.forEach(function (aGuild) {
                         console.log(aGuild.name + " : " + (aGuild.region || " "));
                         if (aa < 45) {
@@ -1002,7 +1006,7 @@ client.on("message", async message => {
                     });
                     var serversEmbed = {
                         color: 3447003,
-                        description: "AmtBot is active on these " + client.guilds.cache.length + " servers",
+                        description: "AmtBot is active on these " + totalServers + " servers",
                         fields: []
                     };
                     serversEmbed.fields.push({ name: "Server", value: allServers, inline: true });
