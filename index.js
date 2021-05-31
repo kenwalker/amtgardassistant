@@ -986,8 +986,11 @@ client.on("message", async message => {
         case "servers":
             var allServers = [];
             var allRegions = [];
+            console.log("1");
             dbo.collection("ork_ids").count().then(function(countORKid) {
+                console.log("2");
                 dbo.collection("attendance").count().then(function(liveAttendances) {
+                    console.log("3");
                     client.guilds.cache.forEach(function (aGuild) {
                         allServers.push(aGuild.name);
                         allRegions.push(aGuild.region || " ");
@@ -1009,6 +1012,7 @@ client.on("message", async message => {
                     serversEmbed.fields.push({ name: "Currently Live Attendance Sessions", value: liveAttendances.toString(), inline: false });
                     message.channel.send({ embed: serversEmbed });
                 });
+                console.log("4");
             });
             break;
         case "help":
