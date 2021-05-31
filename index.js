@@ -991,12 +991,13 @@ client.on("message", async message => {
                 console.log("2");
                 dbo.collection("attendance").count().then(function(liveAttendances) {
                     console.log("3");
-                    var aa = true;
+                    var aa = 1;
                     client.guilds.cache.forEach(function (aGuild) {
-                        if (aa) {
+                        console.log(aGuild.name + " : " + (aGuild.region || " "));
+                        if (aa < 45) {
                             allServers.push(aGuild.name);
                             allRegions.push(aGuild.region || " ");
-                            aa = false;
+                            aa++;
                         }
                     });
                     var serversEmbed = {
