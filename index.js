@@ -991,9 +991,13 @@ client.on("message", async message => {
                 console.log("2");
                 dbo.collection("attendance").count().then(function(liveAttendances) {
                     console.log("3");
+                    var aa = true;
                     client.guilds.cache.forEach(function (aGuild) {
-                        allServers.push(aGuild.name);
-                        allRegions.push(aGuild.region || " ");
+                        if (aa) {
+                            allServers.push(aGuild.name);
+                            allRegions.push(aGuild.region || " ");
+                            aa = false;
+                        }
                     });
                     var serversEmbed = {
                         color: 3447003,
