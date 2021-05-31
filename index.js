@@ -1002,7 +1002,7 @@ client.on("message", async message => {
                     });
                     var serversEmbed = {
                         color: 3447003,
-                        description: "AmtBot is active on these " + allServers.length + " servers",
+                        description: "AmtBot is active on these " + client.guilds.cache.length + " servers",
                         fields: []
                     };
                     serversEmbed.fields.push({ name: "Server", value: allServers, inline: true });
