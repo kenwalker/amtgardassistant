@@ -98,6 +98,12 @@ client.on("message", async message => {
         command = args.shift().toLowerCase();
     }
 
+    if (command === "add" || command === "addme") {
+        // expand shortcut
+        args.unshift("addme");
+        command = "attendance";
+    }
+
     switch (command) {
         case "myork":
             if (args.length === 0) {
@@ -431,7 +437,7 @@ client.on("message", async message => {
                         fields: []
                     };
                     helpEmbed.fields.push({ name: "!ab attendance start *optional_description*", value: "Starts tracking attendance until stop is issued. You can pass an optional description.", inline: false });
-                    helpEmbed.fields.push({ name: "!ab attendance addme *optional_class*", value: "Add yourself to the attendee list. You can provide an optional parameter of the class you want", inline: false });
+                    helpEmbed.fields.push({ name: "!ab attendance addme *optional_class*", value: "Add yourself to the attendee list. You can provide an optional parameter of the class you want. There's a NEW shortcut for this using " + config.prefix + config.app + " addme *optional_class*", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance removeme", value: "Remove yourself from current attendance", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance description *new description*", value: "Change the description of the attendance", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance status", value: "Shows the current attendance status", inline: false });
@@ -1020,8 +1026,9 @@ client.on("message", async message => {
             helpEmbed.fields.push({ name: "!ab player", value: "Look up an Amtgard player in the ORK", inline: false });
             helpEmbed.fields.push({ name: "!ab spell", value: "Look up an Amtgard spell and display the information about it", inline: false });
             helpEmbed.fields.push({ name: "!ab attendance", value: "Start tracking attendance for an online event", inline: false });
+            helpEmbed.fields.push({ name: "!ab addme", value: "Shortcut to _" + config.prefix + config.app + " attendance addme_", inline: false });
             helpEmbed.fields.push({ name: "!ab roll", value: "Generate a random integer between 1 and the provided integer parameter", inline: false });
-            helpEmbed.fields.push({ name: "!ab song", value: "Bardic playlist of songs and requests for songs", inline: false });
+            // helpEmbed.fields.push({ name: "!ab song", value: "Bardic playlist of songs and requests for songs", inline: false });
             helpEmbed.fields.push({ name: "!ab help", value: "Show this help information", inline: false });
             helpEmbed.footer = { text: "Written by Kismet (Easygard, mORK, jsork, AmtQuest, AmtBot)" };
             helpEmbed.url = 'https://www.facebook.com/discordamtbot/';
