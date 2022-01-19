@@ -505,7 +505,7 @@ client.on("message", async message => {
                         date_String: message.createdAt.toDateString()
                     };
                     dbo.collection("attendance").insertOne(newRecord, function (err, result) {
-                        message.reply("Starting to track attendance. Everyone, including you, can now add themselves with\n**!ab attendance addme *optional_class* **");
+                        message.reply("Starting to track attendance. Everyone, including you, can now add themselves with\n**!ab attendance addme *optional_class* ** OR the shortcut **!ab addme *optional_class* **");
                     });
                     totalAttendances++;
                 });
