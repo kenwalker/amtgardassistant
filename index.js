@@ -92,6 +92,7 @@ client.on("message", async message => {
     if (amtbot !== config.app) {
         return;
     }
+    args.pop();
     totalMessages++;
     var command = "help";
     if (args.length !== 0) {
@@ -819,6 +820,7 @@ client.on("message", async message => {
             }
             break;
         case "spell":
+            return;
             if (args.length === 0) {
                 var helpEmbed = {
                     color: 3447003,
@@ -1024,7 +1026,7 @@ client.on("message", async message => {
             };
             helpEmbed.fields.push({ name: "!ab myork", value: "Associate your discord account with your ORK id", inline: false });
             helpEmbed.fields.push({ name: "!ab player", value: "Look up an Amtgard player in the ORK", inline: false });
-            helpEmbed.fields.push({ name: "!ab spell", value: "Look up an Amtgard spell and display the information about it", inline: false });
+            // helpEmbed.fields.push({ name: "!ab spell", value: "Look up an Amtgard spell and display the information about it", inline: false });
             helpEmbed.fields.push({ name: "!ab attendance", value: "Start tracking attendance for an online event", inline: false });
             helpEmbed.fields.push({ name: "!ab addme", value: "Shortcut to _" + config.prefix + config.app + " attendance addme_", inline: false });
             helpEmbed.fields.push({ name: "!ab roll", value: "Generate a random integer between 1 and the provided integer parameter", inline: false });

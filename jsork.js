@@ -201,6 +201,7 @@ const request = require('request');
             var url = ork + '?request';
             url += '&call=Kingdom/GetKingdomDetails';
             url += '&request[KingdomId]=' + kingdomId;
+            url += '&discord=true';
             request(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
@@ -522,6 +523,7 @@ const request = require('request');
             var url = ork + '?request';
             url += '&call=Park/GetParkDetails';
             url += '&request[ParkId]=' + parkID;
+            url += '&discord=true';
             request(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
@@ -661,6 +663,7 @@ const request = require('request');
             var url = ork + '?request';
             url += '&call=Player/GetPlayer';
             url += '&request[MundaneId]=' + mundaneID;
+            url += '&discord=true';
             request(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
@@ -698,7 +701,7 @@ const request = require('request');
 
     jsork.player.getClasses = function (mundaneID) {
         var promise = new Promise(function (resolve, reject) {
-            var url = ork + '?request=&call=Player%2FGetPlayerClasses&request[MundaneId]=' + mundaneID;
+            var url = ork + '?request=&call=Player%2FGetPlayerClasses&request[MundaneId]=' + mundaneID + '&discord=true';
             request(url,
                 {},
                 function (error, result, data) {
@@ -1188,6 +1191,7 @@ const request = require('request');
             url += '&search=' + searchTerm;
             url += '&limit=20';
             url += 'Token=' + jsork.TOKEN;
+            url += '&discord=true';
             request(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
@@ -1209,6 +1213,7 @@ const request = require('request');
             url += '&search=' + searchTerm;
             url += '&limit=20';
             url += 'Token=' + jsork.TOKEN;
+            url += '&discord=true';
             request(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
