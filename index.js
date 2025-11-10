@@ -88,11 +88,13 @@ client.on("message", async message => {
     // args = ["Is", "this", "the", "real", "life?"]
     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
     const amtbot = args.shift().toLowerCase();
-
+    if (args.length > 0 && args[args.length-1].startsWith('<@')) {
+        args.pop() // Get rid of the bot if someone has added it
+    }
     if (amtbot !== config.app) {
         return;
     }
-    args.pop();
+
     totalMessages++;
     var command = "help";
     if (args.length !== 0) {
@@ -159,20 +161,18 @@ client.on("message", async message => {
                             chooseFrom += "\n" + (index + 1) + ") *" + aResult.UserName + "* (" + aResult.Persona + ")" + " - " + aResult.KingdomName + " - " + aResult.ParkName;
                         });
                         message.reply(chooseFrom).then(function (replyMessage) {
-                            const collector = new MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
+                            const collector = new MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 5000 });
                             collector.on('collect', message => {
                                 var userChoice = 0;
                                 if (/^\d+$/.test(message.content)) {
                                     userChoice = Number(message.content);
                                 }
                                 if (userChoice > players.length || userChoice === 0) {
-                                    if (!replyMessage.deleted) { replyMessage.delete(); }
+                                    collector.stop();
                                     return;
                                 }
-                                if (!replyMessage.deleted) {
-                                    replyMessage.delete();
-                                }
                                 associatePlayer(players[userChoice - 1]);
+                                collector.stop();
                             });
                             collector.on('end', endMessage => {
                                 if (!replyMessage.deleted) {
@@ -635,9 +635,13 @@ client.on("message", async message => {
                                 var myobj = { $set: { participants: result.participants } };
                                 dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
                                     if (alreadyTracked) {
-                                        message.reply("You've changed your credit to " + chosenClass + (wrongColor ? ", eh" : ""));
+                                        message.reply("You've changed your credit to " + chosenClass + (wrongColor ? ", eh" : "")).then(function (reply) {
+                                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                                        });
                                     } else {
-                                        message.reply("You've been added to the attendee list as " + chosenClass + (wrongColor ? ", eh" : ""));
+                                        message.reply("You've been added to the attendee list as " + chosenClass + (wrongColor ? ", eh" : "")).then(function (reply) {
+                                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                                        });
                                     }
                                 });
                                 return;
@@ -656,18 +660,18 @@ client.on("message", async message => {
                             }
                         });
                         message.reply(chooseFrom).then(function (replyMessage) {
-                            const collector = new MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
+                            // const collectorFilter = function(m) { return m.author.id === message.author.id };
+                            const collectorFilter = function(m) { return true };
+                            // const collector = message.channel.createMessageCollector({ filter: collectorFilter, time: 15000 });
+                            const collector = new MessageCollector(message.channel, collectorFilter, { time: 15000 });
                             collector.on('collect', message => {
                                 var userChoice = 0;
                                 if (/^\d+$/.test(message.content)) {
                                     userChoice = Number(message.content);
                                 }
                                 if (userChoice > allClasses.length || userChoice === 0) {
-                                    if (!replyMessage.deleted) { replyMessage.delete(); }
+                                    collector.stop();
                                     return;
-                                }
-                                if (!replyMessage.deleted) {
-                                    replyMessage.delete();
                                 }
                                 var chosenClass = allClasses[userChoice - 1];
                                 if (alreadyTracked) {
@@ -687,11 +691,16 @@ client.on("message", async message => {
                                 var myobj = { $set: { participants: result.participants } };
                                 dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
                                     if (alreadyTracked) {
-                                        message.reply("You've changed your credit to " + chosenClass);
+                                        message.reply("You've changed your credit to " + chosenClass).then(function (reply) {
+                                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                                        });
                                     } else {
-                                        message.reply("You've been added to the attendee list as " + chosenClass);
+                                        message.reply("You've been added to the attendee list as " + chosenClass).then(function (reply) {
+                                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                                        });
                                     }
                                 });
+                                collector.stop();
                             });
                             collector.on('end', endMessage => {
                                 if (!replyMessage.deleted) {
@@ -808,16 +817,98 @@ client.on("message", async message => {
             }
             break;
         case "roll":
-            var dieNumber = Number(args[0]);
-            if (args.length === 1 && /^\d+$/.test(args[0]) && dieNumber > 0) {
-                var randomInteger = Math.floor(Math.random() * Math.floor(dieNumber)) + 1;
-                message.reply("rolled " + dieNumber + " and got " + randomInteger);
-            } else {
-                message.reply("Provide a number to randomize. Eg. *!ab roll 20*").then(function (reply) {
-                    if (!reply.deleted) { reply.delete({ timeout: 6000 }); }
+            const diceRollRegex = /(?<numDice>\d*)d(?<dieType>\d+)(?:(?<modifierSign>[+\-])(?<modifier>\d+))?/i;
+
+            var roll = function(anInteger) {
+                return Math.floor(Math.random() * Math.floor(anInteger)) + 1;
+            }
+            var showHelp = function() {
+                var helpEmbed = {
+                    color: 3447003,
+                    title: "!ab roll *dice specification*",
+                    description: "Provide one or more dice specifications to roll.",
+                    fields: []
+                };
+                var idHelp = [];
+                idHelp.push("**!ab roll 20** (Roll 1 20 sized dice)");
+                idHelp.push("**!ab roll 2d10** (Roll 2 10 sided dice)");
+                idHelp.push("**!ab roll 3d18+5** (Roll 3 18 sided dice and add 5)");
+                idHelp.push("**!ab roll 2d20,1d10+3,3d6-5** (Roll several types of die)");
+                idHelp.push("If more than 1 dice is rolled, a sum is provided of all the rolls");
+                idHelp.push("_this message will be removed in 30 seconds_");
+
+                helpEmbed.fields.push({ name: "*Examples:*", value: idHelp, inline: false });
+                message.reply({ embed: helpEmbed }).then(function (reply) {
+                    if (!reply.deleted) { reply.delete({ timeout: 30000 }); }
                 });
                 return;
             }
+            var aRoll = args.join();
+            if (args.length === 0) {
+                showHelp();
+                return;
+            }
+            var individualRolls = aRoll.split(",");
+            var output = "Rolled ";
+            var sum = 0;
+            var numResults = 0;
+            individualRolls.forEach(function(individualRoll, index) {
+                individualRoll = individualRoll.trim();
+                var match = individualRoll.match(diceRollRegex);
+                if (!match) {
+                    if (individualRoll.startsWith("d")) {
+                        match = ("1"+ individualRoll).match(diceRollRegex);
+                    } else {
+                        match = ("1d"+ individualRoll).match(diceRollRegex);
+                    }
+                    if (!match) {
+                        console.log("Invalid roll " + individualRoll);
+                    }
+                }
+                if (match) {
+                    numResults++;
+                    var groups = match.groups;
+                    var numDice = parseInt(groups.numDice);
+                    if (!numDice) {
+                        numDice = 1;
+                    }
+                    var dieType = parseInt(groups.dieType);
+                    var modifierSign = groups.modifierSign;
+                    var modifier = parseInt(groups.modifier);
+                    var total = 0;
+                    var dieOutput = '';
+                    for (var i=0; i<numDice; i++) {
+                        var rollValue = roll(dieType);
+                        dieOutput += '(' + rollValue + ')';
+                        total += rollValue;
+                    }
+                    if (modifierSign === '-') {
+                        dieOutput += '-' + modifier;
+                        total -= modifier;
+                    }
+                    if (modifierSign === '+') {
+                        dieOutput += '+' + modifier;
+                        total += modifier;
+                    }
+                    sum += total;
+                    if (numDice > 1) {
+                        output += individualRoll + " [" + dieOutput + "] = **" + total + "**";
+                    } else {
+                        output += individualRoll + " = **" + total + "**";
+                    }
+                    if (index + 1 < individualRolls.length) {
+                        output += ", ";
+                    }
+                }
+            });
+            if (numResults === 0) {
+                showHelp();
+                return;
+            }
+            if (numResults > 1) {
+                output += ", the sum is **" + sum + "**";
+            }
+            message.reply(output);
             break;
         case "spell":
             return;
@@ -958,7 +1049,6 @@ client.on("message", async message => {
                         message.channel.send({ embed: playerEmbed });
                     });
                 };
-
                 if (players.length > 1) {
                     var chooseFrom = "\nChoose from multiple results, 0 to exit: ";
                     players.forEach(function (aResult, index) {
@@ -967,16 +1057,14 @@ client.on("message", async message => {
                     message.reply(chooseFrom).then(function (replyMessage) {
                         const collector = new MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 15000 });
                         collector.on('collect', message => {
+
                             var userChoice = 0;
                             if (/^\d+$/.test(message.content)) {
                                 userChoice = Number(message.content);
                             }
                             if (userChoice > players.length || userChoice === 0) {
-                                if (!replyMessage.deleted) { replyMessage.delete(); }
+                                collector.stop();
                                 return;
-                            }
-                            if (!replyMessage.deleted) {
-                                replyMessage.delete();
                             }
                             showPlayer(players[userChoice - 1]);
                         });
@@ -1029,8 +1117,8 @@ client.on("message", async message => {
             // helpEmbed.fields.push({ name: "!ab spell", value: "Look up an Amtgard spell and display the information about it", inline: false });
             helpEmbed.fields.push({ name: "!ab attendance", value: "Start tracking attendance for an online event", inline: false });
             helpEmbed.fields.push({ name: "!ab addme", value: "Shortcut to _" + config.prefix + config.app + " attendance addme_", inline: false });
-            helpEmbed.fields.push({ name: "!ab roll", value: "Generate a random integer between 1 and the provided integer parameter", inline: false });
-            // helpEmbed.fields.push({ name: "!ab song", value: "Bardic playlist of songs and requests for songs", inline: false });
+            helpEmbed.fields.push({ name: "!ab roll", value: "Roll dice using the format 2d20 or 1d6+4. See roll help for more", inline: false });
+            helpEmbed.fields.push({ name: "!ab song", value: "Bardic playlist of songs and requests for songs", inline: false });
             helpEmbed.fields.push({ name: "!ab help", value: "Show this help information", inline: false });
             helpEmbed.footer = { text: "Written by Kismet (Easygard, mORK, jsork, AmtQuest, AmtBot)" };
             helpEmbed.url = 'https://www.facebook.com/discordamtbot/';
