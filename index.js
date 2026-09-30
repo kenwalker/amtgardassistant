@@ -88,12 +88,16 @@ client.on("message", async message => {
     // args = ["Is", "this", "the", "real", "life?"]
     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
     const amtbot = args.shift().toLowerCase();
-    if (args.length > 0 && args[args.length-1].startsWith('<@')) {
+    var leaveID = args.find(function(anArg) { return anArg.toLocaleLowerCase() === 'add' ||  anArg.toLocaleLowerCase() === 'remove'});
+    if (!leaveID && args.length > 0 && args[args.length-1].startsWith('<@')) {
         args.pop() // Get rid of the bot if someone has added it
     }
     if (amtbot !== config.app) {
         return;
     }
+    var fromGuild = await client.guilds.fetch(message.guild.id);
+    console.log("MESSAGE " + fromGuild.name + ": " + JSON.stringify(args));
+
 
     totalMessages++;
     var command = "help";
@@ -101,7 +105,7 @@ client.on("message", async message => {
         command = args.shift().toLowerCase();
     }
 
-    if (command === "add" || command === "addme") {
+    if (command === "addme") {
         // expand shortcut
         args.unshift("addme");
         command = "attendance";
@@ -439,7 +443,9 @@ client.on("message", async message => {
                     };
                     helpEmbed.fields.push({ name: "!ab attendance start *optional_description*", value: "Starts tracking attendance until stop is issued. You can pass an optional description.", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance addme *optional_class*", value: "Add yourself to the attendee list. You can provide an optional parameter of the class you want. There's a NEW shortcut for this using " + config.prefix + config.app + " addme *optional_class*", inline: false });
+                    helpEmbed.fields.push({ name: "!ab attendance add @user *optional_class*", value: "Add someone else to the attendee list. You have to provide a discord user using the @user. You can provide an optional parameter of the class you want.", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance removeme", value: "Remove yourself from current attendance", inline: false });
+                    helpEmbed.fields.push({ name: "!ab attendance remove @user", value: "Remove someone else from the attendee list. You have to provide a discord user using the @user.", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance description *new description*", value: "Change the description of the attendance", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance status", value: "Shows the current attendance status", inline: false });
                     helpEmbed.fields.push({ name: "!ab attendance stop", value: "Stops tracking attendance and shows the participant list", inline: false });
@@ -564,7 +570,7 @@ client.on("message", async message => {
                 });
                 break;
             }
-            if ((args.length >= 1 && args[0] === "removeme") || (args.length >= 1 && args[0] === "remove")) {
+            if ((args.length >= 1 && args[0] === "removeme")) {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
@@ -593,7 +599,7 @@ client.on("message", async message => {
                     });
                 });
             }
-            if ((args.length >= 1 && args[0] === "addme") || (args.length >= 1 && args[0] === "add")) {
+            if ((args.length >= 1 && args[0] === "addme")) {
                 dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
                     if (err) throw err;
                     if (result === null) {
@@ -696,6 +702,233 @@ client.on("message", async message => {
                                         });
                                     } else {
                                         message.reply("You've been added to the attendee list as " + chosenClass).then(function (reply) {
+                                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                                        });
+                                    }
+                                });
+                                collector.stop();
+                            });
+                            collector.on('end', endMessage => {
+                                if (!replyMessage.deleted) {
+                                    replyMessage.delete();
+                                }
+                            });
+                        });
+                    };
+
+                    dbo.collection("ork_ids").find(search_filter).toArray(function (err, orkResults) {
+                        if (orkResults.length > 0) {
+                            jsork.player.getInfo(orkResults[0].ork_mundane_id).then(function(playerInfo) {
+                                jsork.kingdom.getInfo(playerInfo.KingdomId).then(function(results) {
+                                    additionalPlayerInfo.kingdom = results.Abbreviation;
+                                    additionalPlayerInfo.fullKingdom = results.KingdomName;
+                                    jsork.park.getInfo(playerInfo.ParkId).then(function(results) {
+                                        additionalPlayerInfo.park = results.Abbreviation;
+                                        additionalPlayerInfo.fullPark = results.ParkName;
+                                        respondWithMessage();
+                                    });
+                                });
+                            });
+                        } else {
+                            respondWithMessage();
+                        }
+                    });
+                });
+                break;
+            }
+            if ((args.length >= 1 && args[0] === "remove")) {
+                dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
+                    if (err) throw err;
+                    if (result === null) {
+                        message.reply("There is no active attendance session in progress").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    }
+                    args.shift(); // Remove the "remove"
+                    var userIdIndex = args.findIndex(function(anArg) { return anArg.indexOf("<@") !== -1 });
+                    if (userIdIndex === -1) {
+                        message.reply("You need to tag/reference a user using the @").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                            return;
+                        });
+                        return;
+                    }
+                    var userIdString = args.splice(userIdIndex, 1)[0]; // Get the userID.
+                    var userId = userIdString.slice(2, userIdString.length -1);
+
+                    // Find a member in the guild's cache
+                    var user = client.users.cache.get(userId);
+
+                    if (!user) {
+                        message.reply("Could not find a matching user to add to remove attendance").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                            return;
+                        });
+                        return;
+                    }
+                    if (user.bot) {
+                        message.reply("You cannot add bots to attendance so thus you cannot remove them").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                            return;
+                        });
+                        return;
+                    }
+
+                    var alreadyTracked = result.participants.find(function (aParticipant) {
+                        return aParticipant.id === user.id;
+                    });
+                    if (!alreadyTracked) {
+                        message.reply("You are not marked as attending the current attendance session").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    };
+
+                    result.participants = result.participants.filter(function (aParticipant) {
+                        return aParticipant.id !== user.id;
+                    });
+                    var myobj = { $set: { participants: result.participants } };
+                    dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                        message.reply(user.username + " has been removed from the current attendance ").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                    });
+                });
+            }
+
+            if ((args.length >= 1 && args[0] === "add")) {
+                dbo.collection("attendance").findOne({ event_track: serverID }, function (err, result) {
+                    if (err) throw err;
+                    if (result === null) {
+                        message.reply("There is no active attendance session in progress").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                        });
+                        return;
+                    }
+                    args.shift(); // Remove the "add"
+                    var userIdIndex = args.findIndex(function(anArg) { return anArg.indexOf("<@") !== -1 });
+                    if (userIdIndex === -1) {
+                        message.reply("You need to tag/reference a user using the @").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                            return;
+                        });
+                        return;
+                    }
+                    var userIdString = args.splice(userIdIndex, 1)[0]; // Get the userID.
+                    var userId = userIdString.slice(2, userIdString.length -1);
+
+                    // Find a member in the guild's cache
+                    var user = client.users.cache.get(userId);
+
+                    if (!user) {
+                        message.reply("Could not find a matching user to add to attendance").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                            return;
+                        });
+                        return;
+                    }
+                    if (user.bot) {
+                        message.reply("You cannot add bots to attendance").then(function (reply) {
+                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                            return;
+                        });
+                        return;
+                    }
+                    var alreadyTracked = result.participants.find(function (aParticipant) {
+                        return aParticipant.id === user.id;
+                    });
+                    var wrongColor = false;
+                    if (args.length > 0 && args[0].toLowerCase() === "colour") {
+                        args[0] = "color";
+                        wrongColor = true;
+                    }
+                    var search_filter = { discord_id: user.id };
+                    var additionalPlayerInfo = {};
+
+                    var respondWithMessage = function() {
+                        // Was the class provided as an argument?
+                        if (args.length > 0) {
+                            var chosenClass = allClasses.find(function (item) { return item.toLowerCase() === args[0].toLowerCase() });
+                            if (chosenClass) {
+                                if (alreadyTracked) {
+                                    alreadyTracked.chosen_class = chosenClass;
+                                } else {
+                                    var userRecord = {
+                                        username: user.username,
+                                        id: user.id,
+                                        chosen_class: chosenClass,
+                                        kingdom: additionalPlayerInfo.kingdom,
+                                        park: additionalPlayerInfo.park,
+                                        fullKingdom: additionalPlayerInfo.fullKingdom,
+                                        fullPark: additionalPlayerInfo.fullPark
+                                    };
+                                    result.participants.push(userRecord);
+                                }
+                                var myobj = { $set: { participants: result.participants } };
+                                dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                                    if (alreadyTracked) {
+                                        message.reply("You've changed their credit to " + chosenClass + (wrongColor ? ", eh" : "")).then(function (reply) {
+                                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                                        });
+                                    } else {
+                                        message.reply(user.username + " has been added to the attendee list as " + chosenClass + (wrongColor ? ", eh" : "")).then(function (reply) {
+                                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                                        });
+                                    }
+                                });
+                                return;
+                            }
+                        }
+                        var chooseFrom = "\nChoose their class, 0 to cancel: \n";
+                        if (alreadyTracked) {
+                            chooseFrom = "\nThey were already attending as " + alreadyTracked.chosen_class + ". You can choose a new class for them or 0 to cancel:\n";
+                        }
+                        allClasses.forEach(function (aClass, index) {
+                            chooseFrom += (index + 1) + ") *" + aClass + "*";
+                            if (false && (index + 1) % 3 === 0 && index < allClasses.length) {
+                                chooseFrom += "\n";
+                            } else {
+                                chooseFrom += "  ";
+                            }
+                        });
+                        message.reply(chooseFrom).then(function (replyMessage) {
+                            // const collectorFilter = function(m) { return m.author.id === message.author.id };
+                            const collectorFilter = function(m) { return true };
+                            // const collector = message.channel.createMessageCollector({ filter: collectorFilter, time: 15000 });
+                            const collector = new MessageCollector(message.channel, collectorFilter, { time: 15000 });
+                            collector.on('collect', message => {
+                                var userChoice = 0;
+                                if (/^\d+$/.test(message.content)) {
+                                    userChoice = Number(message.content);
+                                }
+                                if (userChoice > allClasses.length || userChoice === 0) {
+                                    collector.stop();
+                                    return;
+                                }
+                                var chosenClass = allClasses[userChoice - 1];
+                                if (alreadyTracked) {
+                                    alreadyTracked.chosen_class = chosenClass
+                                } else {
+                                    var userRecord = {
+                                        username: user.username,
+                                        id: user.id,
+                                        chosen_class: chosenClass,
+                                        kingdom: additionalPlayerInfo.kingdom,
+                                        park: additionalPlayerInfo.park,
+                                        fullKingdom: additionalPlayerInfo.fullKingdom,
+                                        fullPark: additionalPlayerInfo.fullPark
+                                    };
+                                    result.participants.push(userRecord);
+                                }
+                                var myobj = { $set: { participants: result.participants } };
+                                dbo.collection("attendance").updateOne({ event_track: serverID }, myobj, function (err, res) {
+                                    if (alreadyTracked) {
+                                        message.reply("You've changed their credit to " + chosenClass).then(function (reply) {
+                                            if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
+                                        });
+                                    } else {
+                                        message.reply(user.username + " has been added to the attendee list as " + chosenClass).then(function (reply) {
                                             if (!reply.deleted) { reply.delete({ timeout: 4000 }); }
                                         });
                                     }
