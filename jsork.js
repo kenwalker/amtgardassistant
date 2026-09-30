@@ -49,6 +49,76 @@ const request = require('request');
     // var ork = 'https://staging.amtgard.com/ork/orkservice/Json/index.php';
     var ork = 'https://ork.amtgard.com/orkservice/Json/index.php';
 
+    // ORK API access (see "Amtgard ORK - API Access")
+    // ------------------------------------------------
+    // Every ORK request carries X-ORK-Client (same convention as the browser
+    // jsork library and the mORK apps): the ORK attributes API usage to an
+    // application by that header, falling back to the User-Agent. It is NOT a
+    // secret and must never contain the key.
+    //
+    // The ORK also sits behind Cloudflare, which rejects automated traffic from
+    // hosted platforms with an HTTP 403 unless every request to /orkservice/*
+    // carries the application's private key in the X-Ork-Key header. Both
+    // headers are attached to every call made through orkRequest() below.
+    jsork.ORK_KEY = null;
+    jsork.CLIENT = 'AmtBot/' + jsork.VERSION;
+    jsork.CONTACT = null;
+
+    // Call once at startup. key: the client key issued by the ORK administrators.
+    // client: product token with version, e.g. "AmtBot/1.1" (must not start with
+    // "Amtgard"). contact: optional URL/email placed in the User-Agent so the ORK
+    // developers can reach you.
+    jsork.configure = function (options) {
+        options = options || {};
+        if (options.key) { jsork.ORK_KEY = String(options.key).trim(); }
+        if (options.client) { jsork.CLIENT = String(options.client).trim(); }
+        if (options.contact) { jsork.CONTACT = String(options.contact).trim(); }
+        if (!jsork.ORK_KEY) {
+            console.warn('jsork: no ORK API key configured (ORK_API_KEY / config.ork_key). ' +
+                'Calls from a hosted platform will be rejected by Cloudflare with HTTP 403.');
+        }
+    };
+
+    function orkHeaders() {
+        var userAgent = jsork.CLIENT + ' (+https://github.com/kenwalker/amtgardassistant' +
+            (jsork.CONTACT ? '; ' + jsork.CONTACT : '') + ')';
+        var headers = {
+            'X-ORK-Client': jsork.CLIENT,
+            'User-Agent': userAgent,
+            'Accept': 'application/json'
+        };
+        if (jsork.ORK_KEY) { headers['X-Ork-Key'] = jsork.ORK_KEY; }
+        return headers;
+    }
+
+    // Drop-in replacement for the plain request(url, callback) call. Adds the
+    // ORK headers and guarantees that `data` is a JSON string, so callers can
+    // JSON.parse() it safely: a Cloudflare 403 (or any other transport failure
+    // or non-JSON reply) becomes an ORK-style error body
+    // {Status: {Status: -1, Message: ...}} instead of an HTML page that would
+    // throw inside the callback and take the bot down.
+    function orkRequest(url, callback) {
+        request({ url: url, headers: orkHeaders(), timeout: 20000 }, function (error, result, data) {
+            var statusCode = result ? result.statusCode : null;
+            var failure = null;
+            if (error) {
+                failure = error.message || String(error);
+            } else if (statusCode !== 200) {
+                failure = 'HTTP ' + statusCode;
+                if (statusCode === 403) {
+                    failure += ' from Cloudflare - check the X-Ork-Key header (ORK_API_KEY / config.ork_key)';
+                }
+            } else {
+                try { JSON.parse(data); } catch (e) { failure = 'response was not JSON'; }
+            }
+            if (failure !== null) {
+                console.error('ORK call failed: ' + failure + ' [' + url + ']');
+                data = JSON.stringify({ Status: { Status: -1, Message: 'ORK call failed: ' + failure } });
+            }
+            callback(error, result, data);
+        });
+    }
+
     jsork.filters = {
         ACTIVE: 0,
         INACTIVE: 1,
@@ -178,8 +248,7 @@ const request = require('request');
 
     jsork.kingdom.getKingdoms = function () {
         var promise = new Promise(function (resolve, reject) {
-            request(ork + '?request=&call=Kingdom/GetKingdoms',
-                {},
+            orkRequest(ork + '?request=&call=Kingdom/GetKingdoms',
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
                     var allKingdoms = [];
@@ -201,8 +270,7 @@ const request = require('request');
             var url = ork + '?request';
             url += '&call=Kingdom/GetKingdomDetails';
             url += '&request[KingdomId]=' + kingdomId;
-            url += '&discord=true';
-            request(url,
+            orkRequest(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
                     if (jsonData.Status.Status === 0) {
@@ -523,8 +591,7 @@ const request = require('request');
             var url = ork + '?request';
             url += '&call=Park/GetParkDetails';
             url += '&request[ParkId]=' + parkID;
-            url += '&discord=true';
-            request(url,
+            orkRequest(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
                     if (jsonData.Status.Status === 0) {
@@ -663,8 +730,7 @@ const request = require('request');
             var url = ork + '?request';
             url += '&call=Player/GetPlayer';
             url += '&request[MundaneId]=' + mundaneID;
-            url += '&discord=true';
-            request(url,
+            orkRequest(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
                     if (jsonData.Status.Status === 0) {
@@ -701,9 +767,8 @@ const request = require('request');
 
     jsork.player.getClasses = function (mundaneID) {
         var promise = new Promise(function (resolve, reject) {
-            var url = ork + '?request=&call=Player%2FGetPlayerClasses&request[MundaneId]=' + mundaneID + '&discord=true';
-            request(url,
-                {},
+            var url = ork + '?request=&call=Player%2FGetPlayerClasses&request[MundaneId]=' + mundaneID;
+            orkRequest(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
                     if (jsonData.Status.Status === 0 || jsonData.Status === true) {
@@ -1190,9 +1255,7 @@ const request = require('request');
             url += '&type=All';
             url += '&search=' + searchTerm;
             url += '&limit=20';
-            url += 'Token=' + jsork.TOKEN;
-            url += '&discord=true';
-            request(url,
+            orkRequest(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
                     if (jsonData.Status.Status === 0 || jsonData.Status === true) {
@@ -1212,9 +1275,7 @@ const request = require('request');
             url += '&type=USER';
             url += '&search=' + searchTerm;
             url += '&limit=20';
-            url += 'Token=' + jsork.TOKEN;
-            url += '&discord=true';
-            request(url,
+            orkRequest(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
                     if (jsonData.Status.Status === 0 || jsonData.Status === true) {
@@ -1235,7 +1296,7 @@ const request = require('request');
             url += '&type=USER';
             url += '&search=' + searchTerm;
             url += '&limit=2000';
-            request(url,
+            orkRequest(url,
                 function (error, result, data) {
                     var jsonData = JSON.parse(data);
                     if (jsonData.Status.Status === 0 || jsonData.Status === true) {

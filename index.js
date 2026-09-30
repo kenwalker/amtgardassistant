@@ -49,6 +49,16 @@ MongoClient.connect(url, function (err, db) {
 const client = new Client();
 
 const config = require("./config.json");
+// config.ork_key (or the ORK_API_KEY environment variable, which wins) is the
+// private key the ORK administrators issued to AmtBot. Cloudflare rejects hosted
+// callers with HTTP 403 unless it is sent on every ORK API call. It is a secret:
+// config.json is git-ignored, never commit the key anywhere else.
+// config.ork_contact (optional) is a contact URL/email the ORK devs can reach you at.
+jsork.configure({
+    key: process.env.ORK_API_KEY || config.ork_key,
+    client: config.ork_client,
+    contact: config.ork_contact
+});
 // config.token contains the bot's token.
 // config.prefix contains the message prefix.
 // config.app contains the app name that is triggered after the prefix.
